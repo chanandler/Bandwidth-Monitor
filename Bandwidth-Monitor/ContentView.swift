@@ -1,214 +1,445 @@
+// MenuBarBandwidthMonitor.swift
+
+
 import SwiftUI
 import Combine
-import Foundation
+import AppKit
 
-// MARK: - Units + Formatting (inline)
-
-enum ThroughputUnits: String {
-    case mbps // megabits per second (decimal)
-    case mBps // megabytes per second (decimal)
-}
-
-struct ThroughputFormatter {
-    static let shared = ThroughputFormatter()
-    private let formatter: NumberFormatter
-
-    private init() {
-        formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 1
-    }
-
-    func string(from bytesPerSecond: Double, units: ThroughputUnits) -> String {
-        switch units {
-        case .mbps:
-            let value = (bytesPerSecond * 8.0) / 1_000_000.0
-            let formatted = formatter.string(from: NSNumber(value: value)) ?? "0.0"
-            return "\(formatted) Mbps"
-        case .mBps:
-            let value = bytesPerSecond / 1_000_000.0
-            let formatted = formatter.string(from: NSNumber(value: value)) ?? "0.0"
-            return "\(formatted) MB/s"
-        }
-    }
-
-    func numberString(from bytesPerSecond: Double, units: ThroughputUnits) -> String {
-        switch units {
-        case .mbps:
-            let value = (bytesPerSecond * 8.0) / 1_000_000.0
-            return formatter.string(from: NSNumber(value: value)) ?? "0.0"
-        case .mBps:
-            let value = bytesPerSecond / 1_000_000.0
-            return formatter.string(from: NSNumber(value: value)) ?? "0.0"
-        }
-    }
-}
-
-@propertyWrapper
-struct ThroughputUnitsStorage {
-    @AppStorage("ThroughputUnitsKey")
-    private var rawValue: String = ThroughputUnits.mbps.rawValue
-
-    var wrappedValue: ThroughputUnits {
-        get { ThroughputUnits(rawValue: rawValue) ?? .mbps }
-        set { rawValue = newValue.rawValue }
-    }
-
-    init() {}
-}
-
-// MARK: - Network Stats Reading (inline)
-
-struct InterfaceStats {
-    let name: String
-    let bytesIn: UInt64
-    let bytesOut: UInt64
-}
-
-enum NetworkStatsReader {
-    static func readInterfaces() -> [InterfaceStats] {
-        var result: [InterfaceStats] = []
-        var ifaddrPtr: UnsafeMutablePointer<ifaddrs>? = nil
-        guard getifaddrs(&ifaddrPtr) == 0, let first = ifaddrPtr else { return result }
-        defer { freeifaddrs(ifaddrPtr) }
-
-        var ptr = first
-        while true {
-            let ifa = ptr.pointee
-            let name = String(cString: ifa.ifa_name)
-            if let dataPtr = ifa.ifa_data?.assumingMemoryBound(to: if_data.self) {
-                let data = dataPtr.pointee
-                if (ifa.ifa_flags & UInt32(IFF_LOOPBACK)) == 0 {
-                    result.append(InterfaceStats(name: name,
-                                                 bytesIn: UInt64(data.ifi_ibytes),
-                                                 bytesOut: UInt64(data.ifi_obytes)))
-                }
-            }
-            guard let next = ifa.ifa_next else { break }
-            ptr = next
-        }
-        return result
-    }
-}
-
-// MARK: - Monitor (inline)
-
-@MainActor
-final class BandwidthMonitor: ObservableObject {
-    struct Speeds {
-        let timestamp: Date
-        let totalInBps: Double
-        let totalOutBps: Double
-        let perInterface: [String: (inBps: Double, outBps: Double)]
-    }
-
-    @Published var latest: Speeds?
-
-    private var lastSample: [String: (inBytes: UInt64, outBytes: UInt64)] = [:]
-    private var task: Task<Void, Never>?
-
-    func start() {
-        stop()
-        task = Task.detached { [weak self] in
-            var lastTime = Date()
-            while !Task.isCancelled {
-                let now = Date()
-                let dt = now.timeIntervalSince(lastTime)
-                lastTime = now
-
-                let interfaces = NetworkStatsReader.readInterfaces()
-
-                await MainActor.run {
-                    var per: [String: (Double, Double)] = [:]
-                    var totalIn: Double = 0
-                    var totalOut: Double = 0
-
-                    for s in interfaces {
-                        let prev = self?.lastSample[s.name]
-                        let dIn = prev != nil ? Double(s.bytesIn &- prev!.inBytes) : 0
-                        let dOut = prev != nil ? Double(s.bytesOut &- prev!.outBytes) : 0
-                        let inBps = dt > 0 ? dIn / dt : 0
-                        let outBps = dt > 0 ? dOut / dt : 0
-                        per[s.name] = (inBps, outBps)
-                        totalIn += inBps
-                        totalOut += outBps
-                    }
-
-                    self?.lastSample = Dictionary(uniqueKeysWithValues: interfaces.map { ($0.name, ($0.bytesIn, $0.bytesOut)) })
-                    self?.latest = Speeds(timestamp: now, totalInBps: totalIn, totalOutBps: totalOut, perInterface: per)
-                }
-
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-        }
-    }
-
-    func stop() {
-        task?.cancel()
-        task = nil
-    }
-}
-
-// MARK: - Compact Menu Label View (inline)
-
-struct CompactStatusLabel: View {
-    @ObservedObject var monitor: BandwidthMonitor
-    @ThroughputUnitsStorage private var units: ThroughputUnits
-
+struct AboutBandwidthManagerView: View {
+    var onClose: (() -> Void)?
     var body: some View {
-        HStack(spacing: 0) {
-            Group {
-                if let s = monitor.latest {
-                    HStack(spacing: 6) {
-                        Text("↑ " + ThroughputFormatter.shared.numberString(from: s.totalOutBps, units: units))
-                            .foregroundStyle(.green)
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text("↓ " + ThroughputFormatter.shared.numberString(from: s.totalInBps, units: units))
-                            .foregroundStyle(.red)
-                    }
-                    .monospacedDigit()
-                } else {
-                    Text("— —")
-                        .monospacedDigit()
-                }
+        VStack(spacing: 16) {
+            Text("Bandwidth Manager for MacOS 26")
+                .font(.headline)
+                .padding(.top, 12)
+            Text("Created by Clint.")
+                .font(.headline)
+                .padding(.top, 12)
+            Text("A small, lightweight network monitor that tracks upload and download values.It is free and open source. If you like it, consider starring it on GitHub!")
+                .multilineTextAlignment(.center)
+                .font(.body)
+                .padding(.horizontal, 10)
+            Button("Close") {
+                onClose?()
             }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 6)
+            .keyboardShortcut(.defaultAction)
+            .padding(.bottom, 8)
         }
-        .background(
-            .thinMaterial,
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+        .frame(width: 340, height: 190)
+        .padding()
     }
 }
-
-// MARK: - Menu Content (optional tiny dropdown)
-
-struct MenuContent: View {
-    var body: some View {
-        Button("Quit Bandwidth Monitor") {
-            NSApp.terminate(nil)
-        }
-        .keyboardShortcut("q", modifiers: [.command])
-        .padding(6)
-    }
-}
-
-// MARK: - App (menu bar only)
 
 @main
-struct BandwidthOnlyMenuBarApp: App {
-    @StateObject private var monitor = BandwidthMonitor()
-
+struct MenuBarBandwidthMonitorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
-        MenuBarExtra {
-            // Minimal dropdown: only Quit with a keyboard shortcut
-            MenuContent()
-        } label: {
-            CompactStatusLabel(monitor: monitor)
-                .task { monitor.start() }
+        // No windows; the status item handles the UI.
+        Settings {
+            EmptyView()
         }
     }
 }
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusItem: NSStatusItem!
+    var monitor: BandwidthMonitor!
+    var timerCancellable: AnyCancellable?
+    var detailsPopover: NSPopover?
+    var aboutWindowController: NSWindowController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Make the status bar button have a solid white background
+        if let button = statusItem.button {
+            button.wantsLayer = true
+            button.layer?.backgroundColor = NSColor.white.cgColor
+            button.layer?.cornerRadius = 4
+        }
+        statusItem.button?.title = "…"
+        statusItem.button?.toolTip = "Bandwidth monitor"
+
+        // Simple menu with Quit
+        let menu = NSMenu()
+        let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
+        menu.insertItem(openStatsItem, at: 0)
+        let aboutItem = NSMenuItem(title: "About Bandwidth Manager", action: #selector(showAbout), keyEquivalent: "")
+        menu.insertItem(aboutItem, at: 1)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q"))
+        statusItem.menu = menu
+
+        monitor = BandwidthMonitor()
+
+        // Update UI every 1 second
+        timerCancellable = monitor.$rates
+            .receive(on: RunLoop.main)
+            .sink { [weak self] (rates: BandwidthRates) in
+                guard let self = self else { return }
+                let title = "↓ \(rates.download)/s | ↑ \(rates.upload)/s"
+                // Build attributed string with green download and red upload
+                let fullString = NSMutableAttributedString(string: title)
+                let fullRange = NSRange(location: 0, length: fullString.length)
+
+                // Use a darker green for download text
+                let darkGreen = NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0)
+
+                // Helper to bold numeric parts (digits, dots, commas) in a given range
+                func boldNumbers(in attributed: NSMutableAttributedString, title: String, range: NSRange) {
+                    let pattern = "[0-9.,]+"
+                    if let regex = try? NSRegularExpression(pattern: pattern) {
+                        let nsTitle = title as NSString
+                        let subString = nsTitle.substring(with: range)
+                        let subRange = NSRange(location: 0, length: (subString as NSString).length)
+                        let matches = regex.matches(in: subString, range: subRange)
+                        let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
+                        for match in matches {
+                            let adjusted = NSRange(location: range.location + match.range.location, length: match.range.length)
+                            attributed.addAttribute(.font, value: boldFont, range: adjusted)
+                        }
+                    }
+                }
+
+                // Default attributes
+                fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+
+                // Find range of download part: "↓ \(rates.download)/s"
+                let downloadString = "↓ \(rates.download)/s"
+                if let downloadRange = title.range(of: downloadString) {
+                    let nsDownloadRange = NSRange(downloadRange, in: title)
+                    fullString.addAttribute(.foregroundColor, value: darkGreen, range: nsDownloadRange)
+                    // Bold the numeric portion of the download string
+                    boldNumbers(in: fullString, title: title, range: nsDownloadRange)
+                }
+
+                // Find range of upload part: "↑ \(rates.upload)/s"
+                let uploadString = "↑ \(rates.upload)/s"
+                if let uploadRange = title.range(of: uploadString) {
+                    let nsUploadRange = NSRange(uploadRange, in: title)
+                    fullString.addAttribute(.foregroundColor, value: NSColor.systemRed, range: nsUploadRange)
+                    // Bold the numeric portion of the upload string
+                    boldNumbers(in: fullString, title: title, range: nsUploadRange)
+                }
+
+                // Set the attributed string to statusItem.button
+                self.statusItem.button?.attributedTitle = fullString
+                // self.statusItem.button?.title = title // old line commented out
+
+                self.statusItem.button?.toolTip = "Download: \(rates.download)/s\nUpload: \(rates.upload)/s"
+            }
+
+        monitor.start()
+    }
+
+    @objc func showAbout() {
+        if let win = aboutWindowController, win.window?.isVisible == true {
+            win.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let contentView = AboutBandwidthManagerView { [weak self] in
+            self?.aboutWindowController?.close()
+            self?.aboutWindowController = nil
+        }
+        let hosting = NSHostingController(rootView: contentView)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "About Bandwidth Manager"
+        window.setContentSize(NSSize(width: 340, height: 190))
+        window.styleMask.insert(.titled)
+        window.styleMask.insert(.closable)
+        window.isReleasedWhenClosed = false
+        let controller = NSWindowController(window: window)
+        self.aboutWindowController = controller
+        controller.showWindow(nil)
+        window.center()
+    }
+
+    @objc func openDetails() {
+        if let popover = detailsPopover, popover.isShown {
+            popover.performClose(nil)
+            detailsPopover = nil
+            return
+        }
+        let popover = NSPopover()
+        popover.contentSize = NSSize(width: 340, height: 210)
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
+        if let button = statusItem.button {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            detailsPopover = popover
+        }
+    }
+
+    @objc func quitApp() {
+        NSApplication.shared.terminate(nil)
+    }
+}
+
+// MARK: - Bandwidth Monitor Implementation
+import Foundation
+import Network
+import Combine
+
+struct BandwidthRates {
+    var download: String
+    var upload: String
+    var timestamp: Date // Add this field
+}
+
+final class BandwidthMonitor: ObservableObject {
+    // Codable struct to represent history sample for persistence
+    private struct HistorySample: Codable {
+        let timestamp: Date
+        let rx: UInt64
+        let tx: UInt64
+    }
+    
+    @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
+    private var timer: Timer?
+    private var prevRx: UInt64 = 0
+    private var prevTx: UInt64 = 0
+    private var isFirstSample = true
+    // Store history as array of HistorySample for codable persistence
+    private var history: [HistorySample] = []
+    
+    private var totalDownloadAllTime: UInt64 = 0
+    private var totalUploadAllTime: UInt64 = 0
+    
+    // Expose as a property
+    var totalsAllTime: (download: UInt64, upload: UInt64) {
+        (totalDownloadAllTime, totalUploadAllTime)
+    }
+    
+    // Define a struct to hold all persistent data, replacing the old array root
+    private struct PersistedData: Codable {
+        let history: [HistorySample]
+        let totalDownloadAllTime: UInt64
+        let totalUploadAllTime: UInt64
+    }
+    
+    // File URL to save/load history JSON data
+    private var historyURL: URL {
+        let fm = FileManager.default
+        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let appDir = dir.appendingPathComponent("MenuBarBandwidthMonitor", isDirectory: true)
+        try? fm.createDirectory(at: appDir, withIntermediateDirectories: true)
+        return appDir.appendingPathComponent("history.json")
+    }
+    
+    // Computed property to get total download/upload bytes in last 24 hours
+    var totalsLast24Hours: (download: UInt64, upload: UInt64) {
+        let cutoff = Date().addingTimeInterval(-86400)
+        var totalRx: UInt64 = 0
+        var totalTx: UInt64 = 0
+        // Sum differences between consecutive samples within the last 24 hours
+        for i in 1..<history.count {
+            let t0 = history[i-1]
+            let t1 = history[i]
+            if t1.timestamp >= cutoff {
+                totalRx += t1.rx - t0.rx
+                totalTx += t1.tx - t0.tx
+            }
+        }
+        return (totalRx, totalTx)
+    }
+    
+    init() {
+        loadHistory() // Load history from disk on startup
+    }
+    
+    func start() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.poll()
+        }
+    }
+    
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        saveHistory() // Save the history when stopping monitoring
+    }
+    
+    private func poll() {
+        let (rx, tx) = getNetworkBytes()
+        guard rx >= 0 && tx >= 0 else { return }
+        if isFirstSample {
+            prevRx = rx
+            prevTx = tx
+            isFirstSample = false
+            return
+        }
+        // Handle counter wraparound (interface reset or overflow)
+        let deltaRx: UInt64 = rx >= prevRx ? rx - prevRx : rx
+        let deltaTx: UInt64 = tx >= prevTx ? tx - prevTx : tx
+        
+        prevRx = rx
+        prevTx = tx
+
+        // Increment totals all time
+        totalDownloadAllTime &+= deltaRx
+        totalUploadAllTime &+= deltaTx
+        
+        // Append new sample to history with current timestamp and byte counters
+        history.append(HistorySample(timestamp: Date(), rx: rx, tx: tx))
+        // Remove old samples beyond 24 hours to keep history size manageable
+        let dayAgo = Date().addingTimeInterval(-86400)
+        history.removeAll { $0.timestamp < dayAgo }
+        saveHistory() // Persist updated history to disk
+
+        DispatchQueue.main.async {
+            self.rates = BandwidthRates(
+                download: Self.format(bytes: deltaRx),
+                upload: Self.format(bytes: deltaTx),
+                timestamp: Date()
+            )
+        }
+    }
+    
+    private func getNetworkBytes() -> (UInt64, UInt64) {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
+        var rx: UInt64 = 0
+        var tx: UInt64 = 0
+        if getifaddrs(&ifaddr) == 0 {
+            var ptr = ifaddr
+            while ptr != nil {
+                let flags = Int32(ptr!.pointee.ifa_flags)
+                _ = ptr!.pointee.ifa_addr.pointee
+                // Only count interfaces that are UP and not LOOPBACK
+                if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
+                    if let data = unsafeBitCast(ptr!.pointee.ifa_data, to: UnsafeMutablePointer<if_data>?.self) {
+                        rx += UInt64(data.pointee.ifi_ibytes)
+                        tx += UInt64(data.pointee.ifi_obytes)
+                    }
+                }
+                ptr = ptr!.pointee.ifa_next
+            }
+            freeifaddrs(ifaddr)
+        }
+        return (rx, tx)
+    }
+    
+    static func format(bytes: UInt64) -> String {
+        let bitsPerSecond = Double(bytes) * 8.0
+        let mbps = bitsPerSecond / 1_000_000.0
+        if mbps >= 1.0 {
+            return String(format: "%.2f Mbps", mbps)
+        } else {
+            let kbps = bitsPerSecond / 1_000.0
+            return String(format: "%.0f kbps", kbps)
+        }
+    }
+    
+    // Save history array as JSON to disk atomically
+    private func saveHistory() {
+        do {
+            let dataToSave = PersistedData(history: history, totalDownloadAllTime: totalDownloadAllTime, totalUploadAllTime: totalUploadAllTime)
+            let data = try JSONEncoder().encode(dataToSave)
+            try data.write(to: historyURL, options: .atomic)
+        } catch {
+            // ignore errors
+        }
+    }
+    
+    // Load history array from JSON file on disk, filtering out old samples
+    private func loadHistory() {
+        do {
+            let data = try Data(contentsOf: historyURL)
+            if let object = try? JSONDecoder().decode(PersistedData.self, from: data) {
+                let dayAgo = Date().addingTimeInterval(-86400)
+                history = object.history.filter { $0.timestamp >= dayAgo }
+                totalDownloadAllTime = object.totalDownloadAllTime
+                totalUploadAllTime = object.totalUploadAllTime
+            } else if let old = try? JSONDecoder().decode([HistorySample].self, from: data) {
+                let dayAgo = Date().addingTimeInterval(-86400)
+                history = old.filter { $0.timestamp >= dayAgo }
+                totalDownloadAllTime = 0
+                totalUploadAllTime = 0
+            }
+        } catch {
+            history = []
+            totalDownloadAllTime = 0
+            totalUploadAllTime = 0
+        }
+    }
+    
+    func resetTotals() {
+        DispatchQueue.main.async {
+            self.history = []
+            self.totalDownloadAllTime = 0
+            self.totalUploadAllTime = 0
+            self.prevRx = 0
+            self.prevTx = 0
+            self.isFirstSample = true
+            self.saveHistory()
+            self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
+        }
+    }
+}
+
+import SwiftUI
+struct BandwidthTotalsView: View {
+    @ObservedObject var monitor: BandwidthMonitor
+    @State private var showResetAlert = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("24-Hour Bandwidth Totals")
+                .font(.headline)
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Download")
+                    Text(BandwidthMonitor.format(bytes: monitor.totalsLast24Hours.download))
+                        .font(.system(.title2, design: .monospaced))
+                        .foregroundColor(.green)
+                }
+                Spacer()
+                VStack(alignment: .leading) {
+                    Text("Upload")
+                    Text(BandwidthMonitor.format(bytes: monitor.totalsLast24Hours.upload))
+                        .font(.system(.title2, design: .monospaced))
+                        .foregroundColor(.red)
+                }
+            }
+            .padding(.top, 8)
+            Divider()
+            Text("All-Time Bandwidth Totals")
+                .font(.headline)
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Download")
+                    Text(BandwidthMonitor.format(bytes: monitor.totalsAllTime.download))
+                        .font(.system(.title3, design: .monospaced))
+                        .foregroundColor(.green)
+                }
+                Spacer()
+                VStack(alignment: .leading) {
+                    Text("Upload")
+                    Text(BandwidthMonitor.format(bytes: monitor.totalsAllTime.upload))
+                        .font(.system(.title3, design: .monospaced))
+                        .foregroundColor(.red)
+                }
+            }
+            
+            Button(role: .destructive) {
+                showResetAlert = true
+            } label: {
+                Text("Reset Totals")
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.top, 16)
+            .buttonStyle(.borderedProminent)
+            .alert("Reset All Bandwidth Totals?", isPresented: $showResetAlert) {
+                Button("Reset", role: .destructive) {
+                    monitor.resetTotals()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will clear all statistics for both 24-hour and all-time totals. This cannot be undone.")
+            }
+            
+            Spacer()
+        }
+        .frame(width: 320, height: 260)
+        .padding(18)
+    }
+}
+
