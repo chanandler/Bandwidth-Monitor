@@ -12,7 +12,7 @@ struct AboutBandwidthManagerView: View {
             Text("Bandwidth Manager for MacOS 26")
                 .font(.headline)
                 .padding(.top, 12)
-            Text("Created by Clint.")
+            Text("Made with a comfy blanket and too much coffee.")
                 .font(.headline)
                 .padding(.top, 12)
             Text("A small, lightweight network monitor that tracks upload and download values.It is free and open source. If you like it, consider starring it on GitHub!")
