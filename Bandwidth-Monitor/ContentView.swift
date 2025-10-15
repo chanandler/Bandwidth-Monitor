@@ -9,7 +9,7 @@ struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
     var body: some View {
         VStack(spacing: 16) {
-            Text("Bandwidth Manager for MacOS 26")
+            Text("Bandwidth Monitor")
                 .font(.headline)
                 .padding(.top, 12)
             Text("Made with a comfy blanket and too much coffee.")
@@ -62,11 +62,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Simple menu with Quit
         let menu = NSMenu()
         let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
+        openStatsItem.target = self
+        openStatsItem.image = nil
+        openStatsItem.onStateImage = nil
+        openStatsItem.offStateImage = nil
+        openStatsItem.mixedStateImage = nil
         menu.insertItem(openStatsItem, at: 0)
-        let aboutItem = NSMenuItem(title: "About Bandwidth Manager", action: #selector(showAbout), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About Bandwidth Monitor", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        aboutItem.image = nil
+        aboutItem.onStateImage = nil
+        aboutItem.offStateImage = nil
+        aboutItem.mixedStateImage = nil
         menu.insertItem(aboutItem, at: 1)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q"))
+        let quitItem = NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         statusItem.menu = menu
 
         monitor = BandwidthMonitor()
@@ -131,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.start()
     }
 
-    @objc func showAbout() {
+    @objc func showAbout(_ sender: Any?) {
         if let win = aboutWindowController, win.window?.isVisible == true {
             win.window?.makeKeyAndOrderFront(nil)
             return
@@ -142,10 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let hosting = NSHostingController(rootView: contentView)
         let window = NSWindow(contentViewController: hosting)
-        window.title = "About Bandwidth Manager"
+        window.title = "About Bandwidth Monitor"
         window.setContentSize(NSSize(width: 340, height: 190))
-        window.styleMask.insert(.titled)
-        window.styleMask.insert(.closable)
+        window.styleMask.insert(NSWindow.StyleMask.titled)
+        window.styleMask.insert(NSWindow.StyleMask.closable)
         window.isReleasedWhenClosed = false
         let controller = NSWindowController(window: window)
         self.aboutWindowController = controller
@@ -153,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
     }
 
-    @objc func openDetails() {
+    @objc func openDetails(_ sender: Any?) {
         if let popover = detailsPopover, popover.isShown {
             popover.performClose(nil)
             detailsPopover = nil
@@ -169,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func quitApp() {
+    @objc func quitApp(_ sender: Any?) {
         NSApplication.shared.terminate(nil)
     }
 }
@@ -230,13 +242,24 @@ final class BandwidthMonitor: ObservableObject {
         let cutoff = Date().addingTimeInterval(-86400)
         var totalRx: UInt64 = 0
         var totalTx: UInt64 = 0
+
+        // Helper to safely compute delta between two monotonically increasing counters that may reset/wrap
+        func safeDelta(newer: UInt64, older: UInt64) -> UInt64 {
+            if newer >= older {
+                return newer &- older
+            } else {
+                // Counter reset or wrap; best effort: count the newer value as the delta since reset
+                return newer
+            }
+        }
+
         // Sum differences between consecutive samples within the last 24 hours
         for i in 1..<history.count {
             let t0 = history[i-1]
             let t1 = history[i]
             if t1.timestamp >= cutoff {
-                totalRx += t1.rx - t0.rx
-                totalTx += t1.tx - t0.tx
+                totalRx &+= safeDelta(newer: t1.rx, older: t0.rx)
+                totalTx &+= safeDelta(newer: t1.tx, older: t0.tx)
             }
         }
         return (totalRx, totalTx)
@@ -382,26 +405,7 @@ struct BandwidthTotalsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("24-Hour Bandwidth Totals")
-                .font(.headline)
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Download")
-                    Text(BandwidthMonitor.format(bytes: monitor.totalsLast24Hours.download))
-                        .font(.system(.title2, design: .monospaced))
-                        .foregroundColor(.green)
-                }
-                Spacer()
-                VStack(alignment: .leading) {
-                    Text("Upload")
-                    Text(BandwidthMonitor.format(bytes: monitor.totalsLast24Hours.upload))
-                        .font(.system(.title2, design: .monospaced))
-                        .foregroundColor(.red)
-                }
-            }
-            .padding(.top, 8)
-            Divider()
-            Text("All-Time Bandwidth Totals")
+            Text("Total Data Downloaded Since Last Reset")
                 .font(.headline)
             HStack {
                 VStack(alignment: .leading) {
@@ -418,6 +422,7 @@ struct BandwidthTotalsView: View {
                         .foregroundColor(.red)
                 }
             }
+            .padding(.top, 8)
             
             Button(role: .destructive) {
                 showResetAlert = true
@@ -433,7 +438,7 @@ struct BandwidthTotalsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This will clear all statistics for both 24-hour and all-time totals. This cannot be undone.")
+                Text("This will clear all statistics for the all-time totals. This cannot be undone.")
             }
             
             Spacer()
