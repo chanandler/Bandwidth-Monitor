@@ -34,10 +34,6 @@ struct AboutBandwidthManagerView: View {
 struct MenuBarBandwidthMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
-        // No windows; the status item handles the UI.
-        Settings {
-            EmptyView()
-        }
     }
 }
 
