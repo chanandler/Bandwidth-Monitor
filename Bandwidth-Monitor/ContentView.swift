@@ -8,25 +8,27 @@ import AppKit
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Bandwidth Monitor")
-                .font(.headline)
-                .padding(.top, 12)
-            Text("Made with a comfy blanket and too much coffee.")
-                .font(.headline)
-                .padding(.top, 12)
-            Text("A small, lightweight network monitor that tracks upload and download values.It is free and open source. If you like it, consider starring it on GitHub!")
-                .multilineTextAlignment(.center)
-                .font(.body)
-                .padding(.horizontal, 10)
-            Button("Close") {
-                onClose?()
+        ZStack(alignment: .top) {
+            VStack(spacing: 10) {
+                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                   let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                    Text("Version \(version) (\(build))")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                Text("A small, lightweight network monitor that tracks upload and download values. Bandwidth Monitor shows real-time download/upload speeds in your menu bar and totals since last reset. Lightweight, clear, and private — no accounts, no tracking.")
+                    .multilineTextAlignment(.center)
+                    .font(.body)
+                    .padding(.horizontal, 10)
+                Button("Close") {
+                    onClose?()
+                }
+                .keyboardShortcut(.defaultAction)
+                .padding(.bottom, 8)
             }
-            .keyboardShortcut(.defaultAction)
-            .padding(.bottom, 8)
         }
         .frame(width: 340, height: 190)
-        .padding()
+        .padding(.top, 0)
     }
 }
 
@@ -149,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.aboutWindowController = nil
         }
         let hosting = NSHostingController(rootView: contentView)
+        // Use the correct label: contentViewController (not contentViewViewController)
         let window = NSWindow(contentViewController: hosting)
         window.title = "About Bandwidth Monitor"
         window.setContentSize(NSSize(width: 340, height: 190))
@@ -157,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
         let controller = NSWindowController(window: window)
         self.aboutWindowController = controller
-        controller.showWindow(nil)
+        controller.showWindow(self)
         window.center()
     }
 
@@ -338,13 +341,31 @@ final class BandwidthMonitor: ObservableObject {
     
     static func format(bytes: UInt64) -> String {
         let bitsPerSecond = Double(bytes) * 8.0
+        // Use decimal (SI) units: 1 kbps = 1,000 bps; 1 Mbps = 1,000,000 bps; 1 Gbps = 1,000,000,000 bps
+        let gbps = bitsPerSecond / 1_000_000_000.0
+        if gbps >= 1.0 {
+            return String(format: "%.2f Gbps", gbps)
+        }
         let mbps = bitsPerSecond / 1_000_000.0
         if mbps >= 1.0 {
             return String(format: "%.2f Mbps", mbps)
-        } else {
-            let kbps = bitsPerSecond / 1_000.0
-            return String(format: "%.0f kbps", kbps)
         }
+        let kbps = bitsPerSecond / 1_000.0
+        return String(format: "%.0f kbps", kbps)
+    }
+    
+    // Formats a raw byte total into human-readable units (kB, MB, GB, TB) using decimal SI units.
+    static func formatTotal(bytes: UInt64) -> String {
+        let b = Double(bytes)
+        let tb = b / 1_000_000_000_000.0
+        if tb >= 1.0 { return String(format: "%.2f TB", tb) }
+        let gb = b / 1_000_000_000.0
+        if gb >= 1.0 { return String(format: "%.2f GB", gb) }
+        let mb = b / 1_000_000.0
+        if mb >= 1.0 { return String(format: "%.2f MB", mb) }
+        let kb = b / 1_000.0
+        if kb >= 1.0 { return String(format: "%.0f kB", kb) }
+        return String(format: "%.0f B", b)
     }
     
     // Save history array as JSON to disk atomically
@@ -394,7 +415,6 @@ final class BandwidthMonitor: ObservableObject {
     }
 }
 
-import SwiftUI
 struct BandwidthTotalsView: View {
     @ObservedObject var monitor: BandwidthMonitor
     @State private var showResetAlert = false
@@ -402,19 +422,21 @@ struct BandwidthTotalsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Total Data Downloaded Since Last Reset")
-                .font(.headline)
+                .font(.title2).bold()
             HStack {
                 VStack(alignment: .leading) {
                     Text("Download")
-                    Text(BandwidthMonitor.format(bytes: monitor.totalsAllTime.download))
-                        .font(.system(.title3, design: .monospaced))
+                        .font(.headline)
+                    Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.download))
+                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
                         .foregroundColor(.green)
                 }
                 Spacer()
                 VStack(alignment: .leading) {
                     Text("Upload")
-                    Text(BandwidthMonitor.format(bytes: monitor.totalsAllTime.upload))
-                        .font(.system(.title3, design: .monospaced))
+                        .font(.headline)
+                    Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.upload))
+                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
                         .foregroundColor(.red)
                 }
             }
