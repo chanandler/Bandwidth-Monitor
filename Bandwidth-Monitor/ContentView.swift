@@ -16,7 +16,7 @@ struct AboutBandwidthManagerView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                Text("A small, lightweight network monitor that tracks upload and download values. Bandwidth Monitor shows real-time download/upload speeds in your menu bar and totals since last reset. Lightweight, clear, and private — no accounts, no tracking.")
+                Text("A small, lightweight network monitor that tracks upload and download values. Bandwidth Monitor shows real-time download / upload speeds in your menu bar and totals since last reset. Lightweight, clear, and private — no accounts, no tracking.")
                     .multilineTextAlignment(.center)
                     .font(.body)
                     .padding(.horizontal, 10)
