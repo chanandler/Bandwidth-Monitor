@@ -4,6 +4,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import StoreKit
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -40,6 +41,110 @@ struct AboutBandwidthManagerView: View {
     }
 }
 
+// MARK: - Tip Jar
+final class TipJarManager: ObservableObject {
+    @Published var products: [Product] = []
+    @Published var isLoading = false
+    @Published var purchaseInProgress = false
+    @Published var lastError: String?
+
+    let productIDs: [String] = [
+        "tip.coffee.199"
+    ]
+    
+    @Published var coffeeProduct: Product?
+
+    func load() async {
+        await MainActor.run { self.isLoading = true; self.lastError = nil }
+        do {
+            let storeProducts = try await Product.products(for: productIDs)
+            await MainActor.run {
+                self.products = storeProducts
+                self.coffeeProduct = storeProducts.first
+            }
+        } catch {
+            await MainActor.run { self.lastError = error.localizedDescription }
+        }
+        await MainActor.run { self.isLoading = false }
+    }
+
+    func tip(_ product: Product) async {
+        await MainActor.run { self.purchaseInProgress = true; self.lastError = nil }
+        do {
+            let result = try await product.purchase()
+            switch result {
+            case .success(let verification):
+                _ = try verification.payloadValue
+                break
+            case .userCancelled, .pending:
+                break
+            @unknown default:
+                break
+            }
+        } catch {
+            await MainActor.run { self.lastError = error.localizedDescription }
+        }
+        await MainActor.run { self.purchaseInProgress = false }
+    }
+}
+
+struct TipJarView: View {
+    @StateObject private var manager = TipJarManager()
+    var onClose: (() -> Void)?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Tip Jar")
+                    .font(.title2).bold()
+                Text("If you find Bandwidth Monitor useful, consider buying me a coffee. Thank you!")
+                    .foregroundStyle(.secondary)
+
+                if manager.isLoading {
+                    ProgressView("Loading…")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else if let err = manager.lastError {
+                    VStack(spacing: 8) {
+                        Text("Couldn’t load products.")
+                        Text(err).font(.footnote).foregroundStyle(.secondary)
+                        Button("Retry") { Task { await manager.load() } }
+                    }
+                    .frame(maxWidth: .infinity)
+                } else if manager.products.isEmpty {
+                    Text("No tip options are currently available.")
+                        .frame(maxWidth: .infinity)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Buy me a coffee")
+                            .font(.headline)
+                        Text("Support development with a small tip.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Spacer()
+                            Button(manager.purchaseInProgress ? "…" : (manager.coffeeProduct?.displayPrice ?? "£1.99")) {
+                                if let product = manager.coffeeProduct {
+                                    Task { await manager.tip(product) }
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(manager.purchaseInProgress || manager.coffeeProduct == nil)
+                        }
+                    }
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Close") { onClose?() }
+                        .keyboardShortcut(.cancelAction)
+                }
+            }
+        }
+        .padding(18)
+        .task { await manager.load() }
+    }
+}
+
 @main
 struct MenuBarBandwidthMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -53,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var timerCancellable: AnyCancellable?
     var detailsPopover: NSPopover?
     var aboutWindowController: NSWindowController?
+    var tipWindowController: NSWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -65,26 +171,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.title = "…"
         statusItem.button?.toolTip = "Bandwidth monitor"
 
-        // Simple menu with Quit
+        // Menu: About, Open Statistics, Tip Jar, separator, Quit
         let menu = NSMenu()
-        let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
-        openStatsItem.target = self
-        openStatsItem.image = nil
-        openStatsItem.onStateImage = nil
-        openStatsItem.offStateImage = nil
-        openStatsItem.mixedStateImage = nil
-        menu.insertItem(openStatsItem, at: 0)
+
         let aboutItem = NSMenuItem(title: "About Bandwidth Monitor", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
-        aboutItem.image = nil
-        aboutItem.onStateImage = nil
-        aboutItem.offStateImage = nil
-        aboutItem.mixedStateImage = nil
-        menu.insertItem(aboutItem, at: 1)
+        menu.addItem(aboutItem)
+
+        let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
+        openStatsItem.target = self
+        menu.addItem(openStatsItem)
+
+        let tipJarItem = NSMenuItem(title: "Tip Jar…", action: #selector(showTipJar), keyEquivalent: "")
+        tipJarItem.target = self
+        menu.addItem(tipJarItem)
+
         menu.addItem(NSMenuItem.separator())
+
         let quitItem = NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+
         statusItem.menu = menu
 
         monitor = BandwidthMonitor()
@@ -168,6 +275,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
         let controller = NSWindowController(window: window)
         self.aboutWindowController = controller
+        controller.showWindow(self)
+        window.center()
+    }
+
+    @objc func showTipJar(_ sender: Any?) {
+        if let win = tipWindowController, win.window?.isVisible == true {
+            win.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let contentView = TipJarView { [weak self] in
+            self?.tipWindowController?.close()
+            self?.tipWindowController = nil
+        }
+        let hosting = NSHostingController(rootView: contentView)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Tip Jar"
+        window.setContentSize(NSSize(width: 380, height: 260))
+        window.contentMinSize = NSSize(width: 340, height: 220)
+        window.styleMask.insert([.titled, .closable, .resizable])
+        window.isReleasedWhenClosed = false
+        let controller = NSWindowController(window: window)
+        self.tipWindowController = controller
         controller.showWindow(self)
         window.center()
     }
