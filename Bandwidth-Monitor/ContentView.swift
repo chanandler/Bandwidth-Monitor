@@ -5,6 +5,7 @@ import SwiftUI
 import Combine
 import AppKit
 import StoreKit
+import ServiceManagement
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -145,6 +146,133 @@ struct TipJarView: View {
     }
 }
 
+// MARK: - Preferences & Settings
+final class Preferences: ObservableObject {
+    static let shared = Preferences()
+    @Published var launchAtLogin: Bool {
+        didSet { Self.setLaunchAtLogin(launchAtLogin) }
+    }
+    @Published var runAsHiddenService: Bool {
+        didSet {
+            UserDefaults.standard.set(runAsHiddenService, forKey: "runAsHiddenService")
+        }
+    }
+
+    private init() {
+        // Initialize from system/user defaults
+        self.launchAtLogin = Self.currentLaunchAtLogin()
+        self.runAsHiddenService = UserDefaults.standard.bool(forKey: "runAsHiddenService")
+    }
+
+    // MARK: Launch at Login helpers
+    private static func currentLaunchAtLogin() -> Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        } else {
+            // Older macOS: we don't manage here; default to stored preference if any
+            return UserDefaults.standard.bool(forKey: "launchAtLogin")
+        }
+    }
+
+    private static func setLaunchAtLogin(_ enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+                UserDefaults.standard.set(enabled, forKey: "launchAtLogin")
+            } catch {
+                // Revert on failure
+                UserDefaults.standard.set(!enabled, forKey: "launchAtLogin")
+            }
+        } else {
+            // Persist intent but cannot programmatically change on old systems without deprecated APIs
+            UserDefaults.standard.set(enabled, forKey: "launchAtLogin")
+        }
+    }
+}
+
+struct SettingsView: View {
+    @ObservedObject private var prefs = Preferences.shared
+    var onClose: (() -> Void)?
+    @State private var showRelaunchHint = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Settings").font(.title2).bold()
+
+            Toggle(isOn: Binding(
+                get: { prefs.launchAtLogin },
+                set: { newValue in
+                    prefs.launchAtLogin = newValue
+                }
+            )) {
+                VStack(alignment: .leading) {
+                    Text("Launch at login")
+                    Text("Automatically start Bandwidth Monitor when you sign in.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Toggle(isOn: Binding(
+                get: { prefs.runAsHiddenService },
+                set: { newValue in
+                    prefs.runAsHiddenService = newValue
+                    showRelaunchHint = true
+                }
+            )) {
+                VStack(alignment: .leading) {
+                    Text("Run as hidden service")
+                    Text("Hide the Dock icon and run in the background. Requires relaunch.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if showRelaunchHint {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                    Text("Please quit and reopen the app to apply this change.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            }
+            HStack {
+                if showRelaunchHint {
+                    Button("Relaunch Now") {
+                        relaunchApp()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
+            Spacer()
+            HStack {
+                Spacer()
+                Button("Close") { onClose?() }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(18)
+    }
+    
+    private func relaunchApp() {
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = [Bundle.main.bundlePath]
+        do {
+            try task.run()
+        } catch {
+            // ignore
+        }
+        NSApplication.shared.terminate(nil)
+    }
+}
+
 @main
 struct MenuBarBandwidthMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -159,8 +287,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var detailsPopover: NSPopover?
     var aboutWindowController: NSWindowController?
     var tipWindowController: NSWindowController?
+    var settingsWindowController: NSWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if UserDefaults.standard.bool(forKey: "runAsHiddenService") {
+            NSApp.setActivationPolicy(.accessory)
+        } else {
+            NSApp.setActivationPolicy(.regular)
+        }
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Make the status bar button have a solid white background
         if let button = statusItem.button {
@@ -171,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.title = "…"
         statusItem.button?.toolTip = "Bandwidth monitor"
 
-        // Menu: About, Open Statistics, Tip Jar, separator, Quit
+        // Menu: About, Open Statistics, Settings, Tip Jar, separator, Quit
         let menu = NSMenu()
 
         let aboutItem = NSMenuItem(title: "About Bandwidth Monitor", action: #selector(showAbout), keyEquivalent: "")
@@ -181,6 +316,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
         openStatsItem.target = self
         menu.addItem(openStatsItem)
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         let tipJarItem = NSMenuItem(title: "Tip Jar…", action: #selector(showTipJar), keyEquivalent: "")
         tipJarItem.target = self
@@ -297,6 +436,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
         let controller = NSWindowController(window: window)
         self.tipWindowController = controller
+        controller.showWindow(self)
+        window.center()
+    }
+
+    @objc func showSettings(_ sender: Any?) {
+        if let win = settingsWindowController, win.window?.isVisible == true {
+            win.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let contentView = SettingsView { [weak self] in
+            self?.settingsWindowController?.close()
+            self?.settingsWindowController = nil
+        }
+        let hosting = NSHostingController(rootView: contentView)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Settings"
+        window.setContentSize(NSSize(width: 420, height: 220))
+        window.contentMinSize = NSSize(width: 380, height: 200)
+        window.styleMask.insert([.titled, .closable, .resizable])
+        window.isReleasedWhenClosed = false
+        let controller = NSWindowController(window: window)
+        self.settingsWindowController = controller
         controller.showWindow(self)
         window.center()
     }
