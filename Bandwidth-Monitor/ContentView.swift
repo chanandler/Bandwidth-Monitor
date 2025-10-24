@@ -54,6 +54,37 @@ final class TipJarManager: ObservableObject {
     ]
     
     @Published var coffeeProduct: Product?
+    
+    private var updatesTask: Task<Void, Never>? = nil
+    
+    deinit {
+        updatesTask?.cancel()
+    }
+    
+    func startListeningForTransactions() {
+        // Finish any existing verified entitlements (defensive)
+        updatesTask = Task.detached(priority: .background) {
+            // Finish any existing verified entitlements (defensive)
+            for await result in StoreKit.Transaction.currentEntitlements {
+                switch result {
+                case .verified(let transaction):
+                    await transaction.finish()
+                case .unverified:
+                    break
+                }
+            }
+
+            // Listen for new transaction updates
+            for await result in StoreKit.Transaction.updates {
+                switch result {
+                case .verified(let transaction):
+                    await transaction.finish()
+                case .unverified:
+                    break
+                }
+            }
+        }
+    }
 
     func load() async {
         await MainActor.run { self.isLoading = true; self.lastError = nil }
@@ -90,8 +121,13 @@ final class TipJarManager: ObservableObject {
 }
 
 struct TipJarView: View {
-    @StateObject private var manager = TipJarManager()
+    @StateObject private var manager: TipJarManager
     var onClose: (() -> Void)?
+
+    init(manager: TipJarManager = TipJarManager(), onClose: (() -> Void)? = nil) {
+        _manager = StateObject(wrappedValue: manager)
+        self.onClose = onClose
+    }
 
     var body: some View {
         ScrollView {
@@ -289,12 +325,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var tipWindowController: NSWindowController?
     var settingsWindowController: NSWindowController?
 
+    let tipJarManager = TipJarManager()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if UserDefaults.standard.bool(forKey: "runAsHiddenService") {
             NSApp.setActivationPolicy(.accessory)
         } else {
             NSApp.setActivationPolicy(.regular)
         }
+
+        tipJarManager.startListeningForTransactions()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         // Make the status bar button have a solid white background
@@ -423,7 +463,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             win.window?.makeKeyAndOrderFront(nil)
             return
         }
-        let contentView = TipJarView { [weak self] in
+        let contentView = TipJarView(manager: tipJarManager) { [weak self] in
             self?.tipWindowController?.close()
             self?.tipWindowController = nil
         }
