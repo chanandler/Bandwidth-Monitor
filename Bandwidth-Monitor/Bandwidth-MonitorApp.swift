@@ -3,6 +3,7 @@
 //  Bandwidth Monitor
 //
 //  Created by Clint Yarwood on 15/10/2025
+//  With help from lots of coffee
 //
 
 // Entry point has moved to MenuBarBandwidthMonitorApp in ContentView.swift
