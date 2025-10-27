@@ -467,19 +467,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Consider a few widest templates for bits and bytes modes; take the maximum width
             let templates = [
-                "↓ 8888 Mbps | ↑ 8888 Mbps",
-                "↓ 8888 Gbps | ↑ 8888 Gbps",
-                "↓ 8888 kB/s | ↑ 8888 kB/s",
-                "↓ 8888 MB/s | ↑ 8888 MB/s",
-                "↓ 8888 GB/s | ↑ 8888 GB/s"
+                "↓ 88888 Mbps | ↑ 88888 Mbps",
+                "↓ 88888 Gbps | ↑ 88888 Gbps",
+                "↓ 88888 kB/s | ↑ 88888 kB/s",
+                "↓ 88888 MB/s | ↑ 88888 MB/s",
+                "↓ 88888 GB/s | ↑ 88888 GB/s"
             ]
             var maxWidth: CGFloat = 0
             for t in templates { let w = (t as NSString).size(withAttributes: attributes).width; if w > maxWidth { maxWidth = w } }
-            let padding: CGFloat = 8.0
+            let padding: CGFloat = 20.0
             statusItem.length = ceil(maxWidth + padding)
 
             // Center the text within the fixed-width button
             button.alignment = .center
+            button.lineBreakMode = .byTruncatingMiddle
+            button.cell?.wraps = false
         }
 
         // Menu: About, Open Statistics, Settings, Tip Jar, separator, Quit
