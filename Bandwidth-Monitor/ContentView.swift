@@ -6,6 +6,7 @@ import Combine
 import AppKit
 import StoreKit
 import ServiceManagement
+import Charts // Optional: for macOS 13+
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -193,11 +194,41 @@ final class Preferences: ObservableObject {
             UserDefaults.standard.set(runAsHiddenService, forKey: "runAsHiddenService")
         }
     }
+    
+    @Published var samplingInterval: Double {
+        didSet {
+            UserDefaults.standard.set(samplingInterval, forKey: "samplingInterval")
+        }
+    }
+    @Published var showBitsPerSecond: Bool {
+        didSet {
+            UserDefaults.standard.set(showBitsPerSecond, forKey: "showBitsPerSecond")
+        }
+    }
+    @Published var useSIUnits: Bool {
+        didSet {
+            UserDefaults.standard.set(useSIUnits, forKey: "useSIUnits")
+        }
+    }
+    @Published var selectedInterfaces: Set<String> {
+        didSet {
+            UserDefaults.standard.set(Array(selectedInterfaces), forKey: "selectedInterfaces")
+        }
+    }
 
     private init() {
         // Initialize from system/user defaults
         self.launchAtLogin = Self.currentLaunchAtLogin()
         self.runAsHiddenService = UserDefaults.standard.bool(forKey: "runAsHiddenService")
+        
+        self.samplingInterval = UserDefaults.standard.object(forKey: "samplingInterval") as? Double ?? 1.0
+        self.showBitsPerSecond = UserDefaults.standard.object(forKey: "showBitsPerSecond") as? Bool ?? true
+        self.useSIUnits = UserDefaults.standard.object(forKey: "useSIUnits") as? Bool ?? true
+        if let arr = UserDefaults.standard.array(forKey: "selectedInterfaces") as? [String] {
+            self.selectedInterfaces = Set(arr)
+        } else {
+            self.selectedInterfaces = []
+        }
     }
 
     // MARK: Launch at Login helpers
@@ -267,6 +298,31 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Monitoring").font(.headline)
+                HStack {
+                    Text("Sampling interval")
+                    Spacer()
+                    Stepper(value: $prefs.samplingInterval, in: 0.25...5.0, step: 0.25) {
+                        Text(String(format: "%.2f s", prefs.samplingInterval))
+                    }
+                    .frame(width: 160)
+                }
+                Toggle(isOn: $prefs.showBitsPerSecond) {
+                    Text("Show bits per second (instead of bytes)")
+                }
+                Toggle(isOn: $prefs.useSIUnits) {
+                    Text("Use SI units (1000) instead of IEC (1024)")
+                }
+            }
+            .padding(.top, 8)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Interfaces").font(.headline)
+                Text("Select interfaces to include. Leave empty to include all.").font(.footnote).foregroundStyle(.secondary)
+                InterfacePickerView(selected: $prefs.selectedInterfaces)
+            }
 
             if showRelaunchHint {
                 HStack(spacing: 8) {
@@ -309,6 +365,64 @@ struct SettingsView: View {
     }
 }
 
+struct InterfacePickerView: View {
+    @Binding var selected: Set<String>
+    @State private var interfaces: [String] = []
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if interfaces.isEmpty {
+                Text("No interfaces detected right now.")
+                    .foregroundStyle(.secondary)
+                    .font(.footnote)
+            } else {
+                ForEach(interfaces, id: \.self) { name in
+                    Toggle(isOn: Binding(get: {
+                        selected.contains(name)
+                    }, set: { newVal in
+                        if newVal {
+                            selected.insert(name)
+                        } else {
+                            selected.remove(name)
+                        }
+                    })) {
+                        Text(name)
+                    }
+                }
+            }
+            Button("Refresh Interfaces") {
+                interfaces = InterfacePickerView.fetchInterfaces()
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 4)
+        }
+        .onAppear {
+            interfaces = InterfacePickerView.fetchInterfaces()
+        }
+    }
+    
+    static func fetchInterfaces() -> [String] {
+        var names: [String] = []
+        var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
+        if getifaddrs(&ifaddr) == 0 {
+            var ptr = ifaddr
+            while ptr != nil {
+                let flags = Int32(ptr!.pointee.ifa_flags)
+                if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
+                    if let c = ptr!.pointee.ifa_name {
+                        let name = String(cString: c)
+                        if !names.contains(name) {
+                            names.append(name)
+                        }
+                    }
+                }
+                ptr = ptr!.pointee.ifa_next
+            }
+            freeifaddrs(ifaddr)
+        }
+        return names.sorted()
+    }
+}
+
 @main
 struct MenuBarBandwidthMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -346,6 +460,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.title = "…"
         statusItem.button?.toolTip = "Bandwidth monitor"
 
+        // Fix the status item width based on a max-width template and center the text
+        if let button = statusItem.button {
+            let font = button.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+
+            // Consider a few widest templates for bits and bytes modes; take the maximum width
+            let templates = [
+                "↓ 8888 Mbps | ↑ 8888 Mbps",
+                "↓ 8888 Gbps | ↑ 8888 Gbps",
+                "↓ 8888 kB/s | ↑ 8888 kB/s",
+                "↓ 8888 MB/s | ↑ 8888 MB/s",
+                "↓ 8888 GB/s | ↑ 8888 GB/s"
+            ]
+            var maxWidth: CGFloat = 0
+            for t in templates { let w = (t as NSString).size(withAttributes: attributes).width; if w > maxWidth { maxWidth = w } }
+            let padding: CGFloat = 8.0
+            statusItem.length = ceil(maxWidth + padding)
+
+            // Center the text within the fixed-width button
+            button.alignment = .center
+        }
+
         // Menu: About, Open Statistics, Settings, Tip Jar, separator, Quit
         let menu = NSMenu()
 
@@ -380,7 +516,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] (rates: BandwidthRates) in
                 guard let self = self else { return }
-                let title = "↓ \(rates.download)/s | ↑ \(rates.upload)/s"
+                let title = "↓ \(rates.download) | ↑ \(rates.upload)"
                 // Build attributed string with green download and red upload
                 let fullString = NSMutableAttributedString(string: title)
                 let fullRange = NSRange(location: 0, length: fullString.length)
@@ -407,8 +543,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Default attributes
                 fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
 
-                // Find range of download part: "↓ \(rates.download)/s"
-                let downloadString = "↓ \(rates.download)/s"
+                // Find range of download part: "↓ \(rates.download)"
+                let downloadString = "↓ \(rates.download)"
                 if let downloadRange = title.range(of: downloadString) {
                     let nsDownloadRange = NSRange(downloadRange, in: title)
                     fullString.addAttribute(.foregroundColor, value: darkGreen, range: nsDownloadRange)
@@ -416,8 +552,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     boldNumbers(in: fullString, title: title, range: nsDownloadRange)
                 }
 
-                // Find range of upload part: "↑ \(rates.upload)/s"
-                let uploadString = "↑ \(rates.upload)/s"
+                // Find range of upload part: "↑ \(rates.upload)"
+                let uploadString = "↑ \(rates.upload)"
                 if let uploadRange = title.range(of: uploadString) {
                     let nsUploadRange = NSRange(uploadRange, in: title)
                     fullString.addAttribute(.foregroundColor, value: NSColor.systemRed, range: nsUploadRange)
@@ -429,7 +565,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.statusItem.button?.attributedTitle = fullString
                 // self.statusItem.button?.title = title // old line commented out
 
-                self.statusItem.button?.toolTip = "Download: \(rates.download)/s\nUpload: \(rates.upload)/s"
+                self.statusItem.button?.toolTip = "Download: \(rates.download)\nUpload: \(rates.upload)"
             }
 
         monitor.start()
@@ -543,6 +679,8 @@ final class BandwidthMonitor: ObservableObject {
     }
     
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
+    @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64)] = []
+    
     private var timer: Timer?
     private var prevRx: UInt64 = 0
     private var prevTx: UInt64 = 0
@@ -552,6 +690,8 @@ final class BandwidthMonitor: ObservableObject {
     
     private var totalDownloadAllTime: UInt64 = 0
     private var totalUploadAllTime: UInt64 = 0
+    
+    private let prefs = Preferences.shared
     
     // Expose as a property
     var totalsAllTime: (download: UInt64, upload: UInt64) {
@@ -604,10 +744,14 @@ final class BandwidthMonitor: ObservableObject {
     
     init() {
         loadHistory() // Load history from disk on startup
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            self.rescheduleTimerIfNeeded()
+        }
     }
     
     func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: prefs.samplingInterval, repeats: true) { [weak self] _ in
             self?.poll()
         }
     }
@@ -616,6 +760,14 @@ final class BandwidthMonitor: ObservableObject {
         timer?.invalidate()
         timer = nil
         saveHistory() // Save the history when stopping monitoring
+    }
+    
+    private func rescheduleTimerIfNeeded() {
+        let interval = prefs.samplingInterval
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: max(0.25, interval), repeats: true) { [weak self] _ in
+            self?.poll()
+        }
     }
     
     private func poll() {
@@ -644,6 +796,11 @@ final class BandwidthMonitor: ObservableObject {
         let dayAgo = Date().addingTimeInterval(-86400)
         history.removeAll { $0.timestamp < dayAgo }
         saveHistory() // Persist updated history to disk
+        
+        let now = Date()
+        recentSamples.append((time: now, down: deltaRx, up: deltaTx))
+        let cutoffRecent = now.addingTimeInterval(-300)
+        recentSamples.removeAll { $0.time < cutoffRecent }
 
         DispatchQueue.main.async {
             self.rates = BandwidthRates(
@@ -654,56 +811,80 @@ final class BandwidthMonitor: ObservableObject {
         }
     }
     
-    private func getNetworkBytes() -> (UInt64, UInt64) {
+    private func getPerInterfaceBytes() -> [(name: String, rx: UInt64, tx: UInt64)] {
+        var results: [(String, UInt64, UInt64)] = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
-        var rx: UInt64 = 0
-        var tx: UInt64 = 0
         if getifaddrs(&ifaddr) == 0 {
             var ptr = ifaddr
             while ptr != nil {
                 let flags = Int32(ptr!.pointee.ifa_flags)
-                _ = ptr!.pointee.ifa_addr.pointee
-                // Only count interfaces that are UP and not LOOPBACK
                 if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
-                    if let data = unsafeBitCast(ptr!.pointee.ifa_data, to: UnsafeMutablePointer<if_data>?.self) {
-                        rx += UInt64(data.pointee.ifi_ibytes)
-                        tx += UInt64(data.pointee.ifi_obytes)
+                    if let nameC = ptr!.pointee.ifa_name {
+                        let name = String(cString: nameC)
+                        if let data = unsafeBitCast(ptr!.pointee.ifa_data, to: UnsafeMutablePointer<if_data>?.self) {
+                            let rx = UInt64(data.pointee.ifi_ibytes)
+                            let tx = UInt64(data.pointee.ifi_obytes)
+                            results.append((name, rx, tx))
+                        }
                     }
                 }
                 ptr = ptr!.pointee.ifa_next
             }
             freeifaddrs(ifaddr)
         }
+        return results
+    }
+    
+    private func getNetworkBytes() -> (UInt64, UInt64) {
+        let interfaces = getPerInterfaceBytes()
+        let selected = Preferences.shared.selectedInterfaces
+        let filtered = selected.isEmpty ? interfaces : interfaces.filter { selected.contains($0.name) }
+        let rx = filtered.reduce(0) { $0 &+ $1.rx }
+        let tx = filtered.reduce(0) { $0 &+ $1.tx }
         return (rx, tx)
     }
     
     static func format(bytes: UInt64) -> String {
-        let bitsPerSecond = Double(bytes) * 8.0
-        // Use decimal (SI) units: 1 kbps = 1,000 bps; 1 Mbps = 1,000,000 bps; 1 Gbps = 1,000,000,000 bps
-        let gbps = bitsPerSecond / 1_000_000_000.0
-        if gbps >= 1.0 {
-            return String(format: "%.2f Gbps", gbps)
+        let prefs = Preferences.shared
+        let unitFactor: Double = prefs.useSIUnits ? 1000.0 : 1024.0
+        if prefs.showBitsPerSecond {
+            let rate = Double(bytes) * 8.0 / prefs.samplingInterval
+            let units = ["bps","kbps","Mbps","Gbps","Tbps"]
+            var value = rate
+            var idx = 0
+            while value >= unitFactor && idx < units.count - 1 {
+                value /= unitFactor
+                idx += 1
+            }
+            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
+            return String(format: fmt, value, units[idx])
+        } else {
+            let rate = Double(bytes) / prefs.samplingInterval
+            let units = ["B/s","kB/s","MB/s","GB/s","TB/s"]
+            var value = rate
+            var idx = 0
+            while value >= unitFactor && idx < units.count - 1 {
+                value /= unitFactor
+                idx += 1
+            }
+            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
+            return String(format: fmt, value, units[idx])
         }
-        let mbps = bitsPerSecond / 1_000_000.0
-        if mbps >= 1.0 {
-            return String(format: "%.2f Mbps", mbps)
-        }
-        let kbps = bitsPerSecond / 1_000.0
-        return String(format: "%.0f kbps", kbps)
     }
     
-    // Formats a raw byte total into human-readable units (kB, MB, GB, TB) using decimal SI units.
+    // Formats a raw byte total into human-readable units (kB, MB, GB, TB) using decimal or binary units.
     static func formatTotal(bytes: UInt64) -> String {
-        let b = Double(bytes)
-        let tb = b / 1_000_000_000_000.0
-        if tb >= 1.0 { return String(format: "%.2f TB", tb) }
-        let gb = b / 1_000_000_000.0
-        if gb >= 1.0 { return String(format: "%.2f GB", gb) }
-        let mb = b / 1_000_000.0
-        if mb >= 1.0 { return String(format: "%.2f MB", mb) }
-        let kb = b / 1_000.0
-        if kb >= 1.0 { return String(format: "%.0f kB", kb) }
-        return String(format: "%.0f B", b)
+        let prefs = Preferences.shared
+        let factor: Double = prefs.useSIUnits ? 1000.0 : 1024.0
+        let suffixes = prefs.useSIUnits ? ["B","kB","MB","GB","TB"] : ["B","KiB","MiB","GiB","TiB"]
+        var value = Double(bytes)
+        var idx = 0
+        while value >= factor && idx < suffixes.count - 1 {
+            value /= factor
+            idx += 1
+        }
+        let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
+        return String(format: fmt, value, suffixes[idx])
     }
     
     // Save history array as JSON to disk atomically
@@ -761,6 +942,24 @@ struct BandwidthTotalsView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Total Data Downloaded Since Last Reset")
                 .font(.title2).bold()
+            
+            if #available(macOS 13.0, *) {
+                Chart {
+                    ForEach(monitor.recentSamples, id: \.time) { sample in
+                        LineMark(x: .value("Time", sample.time), y: .value("Down", Double(sample.down) / Preferences.shared.samplingInterval))
+                            .foregroundStyle(.green)
+                        LineMark(x: .value("Time", sample.time), y: .value("Up", Double(sample.up) / Preferences.shared.samplingInterval))
+                            .foregroundStyle(.red)
+                    }
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 80)
+            } else {
+                SparklineView(samples: monitor.recentSamples.map { (time: $0.time, down: Double($0.down), up: Double($0.up)) })
+                    .frame(height: 80)
+            }
+            
             HStack {
                 VStack(alignment: .leading) {
                     Text("Download")
@@ -801,6 +1000,44 @@ struct BandwidthTotalsView: View {
         }
         .frame(width: 320, height: 260)
         .padding(18)
+    }
+}
+
+struct SparklineView: View {
+    let samples: [(time: Date, down: Double, up: Double)]
+    var body: some View {
+        GeometryReader { geo in
+            let pointsDown = SparklineView.normalize(samples.map { $0.down }, width: geo.size.width, height: geo.size.height)
+            let pointsUp = SparklineView.normalize(samples.map { $0.up }, width: geo.size.width, height: geo.size.height)
+            ZStack {
+                Path { path in
+                    guard !pointsDown.isEmpty else { return }
+                    path.move(to: pointsDown[0])
+                    for p in pointsDown.dropFirst() {
+                        path.addLine(to: p)
+                    }
+                }
+                .stroke(Color.green, lineWidth: 1)
+                Path { path in
+                    guard !pointsUp.isEmpty else { return }
+                    path.move(to: pointsUp[0])
+                    for p in pointsUp.dropFirst() {
+                        path.addLine(to: p)
+                    }
+                }
+                .stroke(Color.red, lineWidth: 1)
+            }
+        }
+    }
+    static func normalize(_ values: [Double], width: CGFloat, height: CGFloat) -> [CGPoint] {
+        guard !values.isEmpty else { return [] }
+        let maxV = max(values.max() ?? 1, 1)
+        let stepX = width / CGFloat(max(values.count - 1, 1))
+        return values.enumerated().map { (idx, v) in
+            let x = CGFloat(idx) * stepX
+            let y = height - CGFloat(v / maxV) * height
+            return CGPoint(x: x, y: y)
+        }
     }
 }
 
