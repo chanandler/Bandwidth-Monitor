@@ -768,14 +768,19 @@ struct BandwidthRates {
     var timestamp: Date // Add this field
 }
 
+private struct HistorySample: Codable {
+    let timestamp: Date
+    let rx: UInt64
+    let tx: UInt64
+}
+
+private struct PersistedData: Codable {
+    let history: [HistorySample]
+    let totalDownloadAllTime: UInt64
+    let totalUploadAllTime: UInt64
+}
+
 final class BandwidthMonitor: ObservableObject {
-    // Codable struct to represent history sample for persistence
-    private struct HistorySample: Codable {
-        let timestamp: Date
-        let rx: UInt64
-        let tx: UInt64
-    }
-    
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64, dt: TimeInterval)] = []
     @Published var peakDownPerSecondBytes: Double = 0
@@ -801,14 +806,7 @@ final class BandwidthMonitor: ObservableObject {
     var totalsAllTime: (download: UInt64, upload: UInt64) {
         (totalDownloadAllTime, totalUploadAllTime)
     }
-    
-    // Define a struct to hold all persistent data, replacing the old array root
-    private struct PersistedData: Codable {
-        let history: [HistorySample]
-        let totalDownloadAllTime: UInt64
-        let totalUploadAllTime: UInt64
-    }
-    
+        
     // File URL to save/load history JSON data
     private var historyURL: URL {
         let fm = FileManager.default
@@ -1195,9 +1193,8 @@ struct BandwidthTotalsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.top, 8)
             }
-            
-            .padding(.top, 8)
             
             Button(role: .destructive) {
                 showResetAlert = true
