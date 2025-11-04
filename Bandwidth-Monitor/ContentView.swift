@@ -7,6 +7,7 @@ import AppKit
 import StoreKit
 import ServiceManagement
 import Charts // Optional: for macOS 13+
+import CoreWLAN
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -49,6 +50,7 @@ final class TipJarManager: ObservableObject {
     @Published var isLoading = false
     @Published var purchaseInProgress = false
     @Published var lastError: String?
+    @Published var lastPurchaseMessage: String?
 
     let productIDs: [String] = [
         "tip.coffee.199"
@@ -102,15 +104,17 @@ final class TipJarManager: ObservableObject {
     }
 
     func tip(_ product: Product) async {
-        await MainActor.run { self.purchaseInProgress = true; self.lastError = nil }
+        await MainActor.run { self.purchaseInProgress = true; self.lastError = nil; self.lastPurchaseMessage = nil }
         do {
             let result = try await product.purchase()
             switch result {
             case .success(let verification):
                 _ = try verification.payloadValue
-                break
-            case .userCancelled, .pending:
-                break
+                await MainActor.run { self.lastPurchaseMessage = "Thank you!" }
+            case .pending:
+                await MainActor.run { self.lastPurchaseMessage = "Purchase pending approval." }
+            case .userCancelled:
+                await MainActor.run { self.lastPurchaseMessage = nil }
             @unknown default:
                 break
             }
@@ -160,13 +164,19 @@ struct TipJarView: View {
                             .foregroundStyle(.secondary)
                         HStack {
                             Spacer()
-                            Button(manager.purchaseInProgress ? "…" : (manager.coffeeProduct?.displayPrice ?? "£1.99")) {
+                            Button(manager.purchaseInProgress ? "…" : (manager.coffeeProduct.map { "\($0.displayName) – \($0.displayPrice)" } ?? "Tip")) {
                                 if let product = manager.coffeeProduct {
                                     Task { await manager.tip(product) }
                                 }
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(manager.purchaseInProgress || manager.coffeeProduct == nil)
+                            
+                            if let msg = manager.lastPurchaseMessage {
+                                Text(msg)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -368,6 +378,38 @@ struct SettingsView: View {
 struct InterfacePickerView: View {
     @Binding var selected: Set<String>
     @State private var interfaces: [String] = []
+    
+    // Cache the Wi‑Fi BSD interface name if available (e.g., "en0")
+    private static let wifiBSDName: String? = CWWiFiClient.shared().interface()?.interfaceName
+
+    static func friendlyName(for name: String) -> String {
+        if let wifi = wifiBSDName, wifi == name {
+            return "Wi‑Fi (\(name))"
+        }
+        if name.hasPrefix("en") {
+            return "Ethernet (\(name))"
+        }
+        if name.hasPrefix("utun") {
+            return "VPN (\(name))"
+        }
+        if name.hasPrefix("awdl") {
+            return "AirDrop (\(name))"
+        }
+        if name.hasPrefix("llw") {
+            return "Low‑Latency Wireless (\(name))"
+        }
+        if name.hasPrefix("bridge") {
+            return "Bridge (\(name))"
+        }
+        if name.hasPrefix("ap") {
+            return "Personal Hotspot (\(name))"
+        }
+        if name.hasPrefix("p2p") {
+            return "Peer‑to‑Peer (\(name))"
+        }
+        return name
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if interfaces.isEmpty {
@@ -385,7 +427,7 @@ struct InterfacePickerView: View {
                             selected.remove(name)
                         }
                     })) {
-                        Text(name)
+                        Text(InterfacePickerView.friendlyName(for: name))
                     }
                 }
             }
@@ -427,6 +469,10 @@ struct InterfacePickerView: View {
 struct MenuBarBandwidthMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
+        Settings {
+            SettingsView()
+                .frame(width: 420, height: 220)
+        }
     }
 }
 
@@ -451,11 +497,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tipJarManager.startListeningForTransactions()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        // Make the status bar button have a solid white background
+        // Use monospaced digits for stable width and native appearance
         if let button = statusItem.button {
-            button.wantsLayer = true
-            button.layer?.backgroundColor = NSColor.white.cgColor
-            button.layer?.cornerRadius = 4
+            let size = button.font?.pointSize ?? NSFont.systemFontSize
+            button.font = NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
+            button.setAccessibilityLabel("Bandwidth Monitor")
         }
         statusItem.button?.title = "…"
         statusItem.button?.toolTip = "Bandwidth monitor"
@@ -467,11 +513,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Consider a few widest templates for bits and bytes modes; take the maximum width
             let templates = [
-                "↓ 88888 Mbps | ↑ 88888 Mbps",
-                "↓ 88888 Gbps | ↑ 88888 Gbps",
-                "↓ 88888 kB/s | ↑ 88888 kB/s",
-                "↓ 88888 MB/s | ↑ 88888 MB/s",
-                "↓ 88888 GB/s | ↑ 88888 GB/s"
+                "↓ 88888 Mbps ↑ 88888 Mbps",
+                "↓ 88888 Gbps ↑ 88888 Gbps",
+                "↓ 88888 kB/s ↑ 88888 kB/s",
+                "↓ 88888 MB/s ↑ 88888 MB/s",
+                "↓ 88888 GB/s ↑ 88888 GB/s"
             ]
             var maxWidth: CGFloat = 0
             for t in templates { let w = (t as NSString).size(withAttributes: attributes).width; if w > maxWidth { maxWidth = w } }
@@ -491,7 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        let openStatsItem = NSMenuItem(title: "Open download and upload Statistics", action: #selector(openDetails), keyEquivalent: "")
+        let openStatsItem = NSMenuItem(title: "Open Statistics", action: #selector(openDetails), keyEquivalent: "")
         openStatsItem.target = self
         menu.addItem(openStatsItem)
 
@@ -518,7 +564,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] (rates: BandwidthRates) in
                 guard let self = self else { return }
-                let title = "↓ \(rates.download) | ↑ \(rates.upload)"
+                let title = "↓ \(rates.download) ↑ \(rates.upload)"
                 // Build attributed string with green download and red upload
                 let fullString = NSMutableAttributedString(string: title)
                 let fullRange = NSRange(location: 0, length: fullString.length)
@@ -533,9 +579,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         let nsTitle = title as NSString
                         let subString = nsTitle.substring(with: range)
                         let subRange = NSRange(location: 0, length: (subString as NSString).length)
-                        let matches = regex.matches(in: subString, range: subRange)
-                        let boldFont = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
-                        for match in matches {
+                        let boldFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+                        for match in regex.matches(in: subString, range: subRange) {
                             let adjusted = NSRange(location: range.location + match.range.location, length: match.range.length)
                             attributed.addAttribute(.font, value: boldFont, range: adjusted)
                         }
@@ -544,6 +589,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 // Default attributes
                 fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+                fullString.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular), range: fullRange)
 
                 // Find range of download part: "↓ \(rates.download)"
                 let downloadString = "↓ \(rates.download)"
@@ -663,8 +709,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - Bandwidth Monitor Implementation
 import Foundation
-import Network
-import Combine
 
 struct BandwidthRates {
     var download: String
@@ -681,7 +725,7 @@ final class BandwidthMonitor: ObservableObject {
     }
     
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
-    @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64)] = []
+    @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64, dt: TimeInterval)] = []
     
     private var timer: Timer?
     private var prevRx: UInt64 = 0
@@ -694,6 +738,10 @@ final class BandwidthMonitor: ObservableObject {
     private var totalUploadAllTime: UInt64 = 0
     
     private let prefs = Preferences.shared
+    
+    private var lastSampleDate: Date?
+    private var lastSaveDate: Date = .distantPast
+    private var samplingCancellable: AnyCancellable?
     
     // Expose as a property
     var totalsAllTime: (download: UInt64, upload: UInt64) {
@@ -746,10 +794,11 @@ final class BandwidthMonitor: ObservableObject {
     
     init() {
         loadHistory() // Load history from disk on startup
-        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            guard let self = self else { return }
-            self.rescheduleTimerIfNeeded()
-        }
+        samplingCancellable = Preferences.shared.$samplingInterval
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                self?.rescheduleTimerIfNeeded()
+            }
     }
     
     func start() {
@@ -773,14 +822,17 @@ final class BandwidthMonitor: ObservableObject {
     }
     
     private func poll() {
+        let now = Date()
         let (rx, tx) = getNetworkBytes()
-        guard rx >= 0 && tx >= 0 else { return }
         if isFirstSample {
             prevRx = rx
             prevTx = tx
+            lastSampleDate = now
             isFirstSample = false
             return
         }
+        let elapsed = max(0.001, now.timeIntervalSince(lastSampleDate ?? now))
+        lastSampleDate = now
         // Handle counter wraparound (interface reset or overflow)
         let deltaRx: UInt64 = rx >= prevRx ? rx - prevRx : rx
         let deltaTx: UInt64 = tx >= prevTx ? tx - prevTx : tx
@@ -793,22 +845,21 @@ final class BandwidthMonitor: ObservableObject {
         totalUploadAllTime &+= deltaTx
         
         // Append new sample to history with current timestamp and byte counters
-        history.append(HistorySample(timestamp: Date(), rx: rx, tx: tx))
+        history.append(HistorySample(timestamp: now, rx: rx, tx: tx))
         // Remove old samples beyond 24 hours to keep history size manageable
-        let dayAgo = Date().addingTimeInterval(-86400)
+        let dayAgo = now.addingTimeInterval(-86400)
         history.removeAll { $0.timestamp < dayAgo }
-        saveHistory() // Persist updated history to disk
+        saveHistoryIfNeeded() // Persist updated history to disk (throttled)
         
-        let now = Date()
-        recentSamples.append((time: now, down: deltaRx, up: deltaTx))
+        recentSamples.append((time: now, down: deltaRx, up: deltaTx, dt: elapsed))
         let cutoffRecent = now.addingTimeInterval(-300)
         recentSamples.removeAll { $0.time < cutoffRecent }
 
         DispatchQueue.main.async {
             self.rates = BandwidthRates(
-                download: Self.format(bytes: deltaRx),
-                upload: Self.format(bytes: deltaTx),
-                timestamp: Date()
+                download: Self.format(bytes: deltaRx, over: elapsed),
+                upload: Self.format(bytes: deltaTx, over: elapsed),
+                timestamp: now
             )
         }
     }
@@ -840,7 +891,15 @@ final class BandwidthMonitor: ObservableObject {
     private func getNetworkBytes() -> (UInt64, UInt64) {
         let interfaces = getPerInterfaceBytes()
         let selected = Preferences.shared.selectedInterfaces
-        let filtered = selected.isEmpty ? interfaces : interfaces.filter { selected.contains($0.name) }
+        let ignoredPrefixes = ["awdl", "llw", "utun", "bridge", "ap", "p2p"]
+        let filtered: [(name: String, rx: UInt64, tx: UInt64)]
+        if selected.isEmpty {
+            filtered = interfaces.filter { tuple in
+                !ignoredPrefixes.contains(where: { tuple.name.hasPrefix($0) })
+            }
+        } else {
+            filtered = interfaces.filter { selected.contains($0.name) }
+        }
         let rx = filtered.reduce(0) { $0 &+ $1.rx }
         let tx = filtered.reduce(0) { $0 &+ $1.tx }
         return (rx, tx)
@@ -873,6 +932,26 @@ final class BandwidthMonitor: ObservableObject {
             return String(format: fmt, value, units[idx])
         }
     }
+
+    static func format(bytes: UInt64, over interval: TimeInterval) -> String {
+        let prefs = Preferences.shared
+        let unitFactor: Double = prefs.useSIUnits ? 1000.0 : 1024.0
+        if prefs.showBitsPerSecond {
+            var value = (Double(bytes) * 8.0) / interval
+            let units = ["bps","kbps","Mbps","Gbps","Tbps"]
+            var idx = 0
+            while value >= unitFactor && idx < units.count - 1 { value /= unitFactor; idx += 1 }
+            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
+            return String(format: fmt, value, units[idx])
+        } else {
+            var value = Double(bytes) / interval
+            let units = ["B/s","kB/s","MB/s","GB/s","TB/s"]
+            var idx = 0
+            while value >= unitFactor && idx < units.count - 1 { value /= unitFactor; idx += 1 }
+            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
+            return String(format: fmt, value, units[idx])
+        }
+    }
     
     // Formats a raw byte total into human-readable units (kB, MB, GB, TB) using decimal or binary units.
     static func formatTotal(bytes: UInt64) -> String {
@@ -889,14 +968,24 @@ final class BandwidthMonitor: ObservableObject {
         return String(format: fmt, value, suffixes[idx])
     }
     
-    // Save history array as JSON to disk atomically
+    private func saveHistoryIfNeeded() {
+        let now = Date()
+        if now.timeIntervalSince(lastSaveDate) >= 15 {
+            saveHistory()
+            lastSaveDate = now
+        }
+    }
+    
+    // Save history array as JSON to disk atomically off main thread
     private func saveHistory() {
-        do {
-            let dataToSave = PersistedData(history: history, totalDownloadAllTime: totalDownloadAllTime, totalUploadAllTime: totalUploadAllTime)
-            let data = try JSONEncoder().encode(dataToSave)
-            try data.write(to: historyURL, options: .atomic)
-        } catch {
-            // ignore errors
+        let snapshot = PersistedData(history: self.history, totalDownloadAllTime: self.totalDownloadAllTime, totalUploadAllTime: self.totalUploadAllTime)
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                try data.write(to: self.historyURL, options: .atomic)
+            } catch {
+                // ignore errors
+            }
         }
     }
     
@@ -942,15 +1031,15 @@ struct BandwidthTotalsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Total Data Downloaded Since Last Reset")
+            Text("Total Data Since Last Reset")
                 .font(.title2).bold()
             
             if #available(macOS 13.0, *) {
                 Chart {
                     ForEach(monitor.recentSamples, id: \.time) { sample in
-                        LineMark(x: .value("Time", sample.time), y: .value("Down", Double(sample.down) / Preferences.shared.samplingInterval))
+                        LineMark(x: .value("Time", sample.time), y: .value("Down", Double(sample.down) / sample.dt))
                             .foregroundStyle(.green)
-                        LineMark(x: .value("Time", sample.time), y: .value("Up", Double(sample.up) / Preferences.shared.samplingInterval))
+                        LineMark(x: .value("Time", sample.time), y: .value("Up", Double(sample.up) / sample.dt))
                             .foregroundStyle(.red)
                     }
                 }
@@ -958,7 +1047,7 @@ struct BandwidthTotalsView: View {
                 .chartYAxis(.hidden)
                 .frame(height: 80)
             } else {
-                SparklineView(samples: monitor.recentSamples.map { (time: $0.time, down: Double($0.down), up: Double($0.up)) })
+                SparklineView(samples: monitor.recentSamples.map { (time: $0.time, down: Double($0.down) / $0.dt, up: Double($0.up) / $0.dt) })
                     .frame(height: 80)
             }
             
