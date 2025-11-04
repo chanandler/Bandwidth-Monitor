@@ -225,6 +225,15 @@ final class Preferences: ObservableObject {
             UserDefaults.standard.set(Array(selectedInterfaces), forKey: "selectedInterfaces")
         }
     }
+    @Published var dataCapEnabled: Bool {
+        didSet { UserDefaults.standard.set(dataCapEnabled, forKey: "dataCapEnabled") }
+    }
+    @Published var dataCapGB: Double {
+        didSet { UserDefaults.standard.set(dataCapGB, forKey: "dataCapGB") }
+    }
+    @Published var billingDay: Int {
+        didSet { UserDefaults.standard.set(billingDay, forKey: "billingDay") }
+    }
 
     private init() {
         // Initialize from system/user defaults
@@ -239,6 +248,9 @@ final class Preferences: ObservableObject {
         } else {
             self.selectedInterfaces = []
         }
+        self.dataCapEnabled = UserDefaults.standard.object(forKey: "dataCapEnabled") as? Bool ?? false
+        self.dataCapGB = UserDefaults.standard.object(forKey: "dataCapGB") as? Double ?? 500.0
+        self.billingDay = UserDefaults.standard.object(forKey: "billingDay") as? Int ?? 1
     }
 
     // MARK: Launch at Login helpers
@@ -310,6 +322,21 @@ struct SettingsView: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
+                Text("Sampling").font(.headline)
+                Text("Choose a preset or fine-tune below.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Picker("Presets", selection: $prefs.samplingInterval) {
+                    Text("0.25 s").tag(0.25)
+                    Text("0.5 s").tag(0.5)
+                    Text("1 s").tag(1.0)
+                    Text("2 s").tag(2.0)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Monitoring").font(.headline)
                 HStack {
                     Text("Sampling interval")
@@ -332,6 +359,31 @@ struct SettingsView: View {
                 Text("Interfaces").font(.headline)
                 Text("Select interfaces to include. Leave empty to include all.").font(.footnote).foregroundStyle(.secondary)
                 InterfacePickerView(selected: $prefs.selectedInterfaces)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Data Cap").font(.headline)
+                Toggle(isOn: $prefs.dataCapEnabled) {
+                    Text("Enable monthly data cap tracking")
+                }
+                HStack {
+                    Text("Cap size")
+                    Spacer()
+                    Stepper(value: $prefs.dataCapGB, in: 1...5000, step: 1) {
+                        Text(String(format: "%.0f GB", prefs.dataCapGB))
+                    }
+                    .frame(width: 160)
+                }
+                HStack {
+                    Text("Billing day")
+                    Spacer()
+                    Picker("Billing day", selection: $prefs.billingDay) {
+                        ForEach(1...28, id: \.self) { day in
+                            Text("\(day)").tag(day)
+                        }
+                    }
+                    .frame(width: 120)
+                }
             }
 
             if showRelaunchHint {
@@ -726,6 +778,8 @@ final class BandwidthMonitor: ObservableObject {
     
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64, dt: TimeInterval)] = []
+    @Published var peakDownPerSecondBytes: Double = 0
+    @Published var peakUpPerSecondBytes: Double = 0
     
     private var timer: Timer?
     private var prevRx: UInt64 = 0
@@ -846,14 +900,21 @@ final class BandwidthMonitor: ObservableObject {
         
         // Append new sample to history with current timestamp and byte counters
         history.append(HistorySample(timestamp: now, rx: rx, tx: tx))
-        // Remove old samples beyond 24 hours to keep history size manageable
-        let dayAgo = now.addingTimeInterval(-86400)
-        history.removeAll { $0.timestamp < dayAgo }
+        // Remove old samples beyond 35 days to keep history size manageable
+        let cutoff = now.addingTimeInterval(-35 * 86400)
+        history.removeAll { $0.timestamp < cutoff }
         saveHistoryIfNeeded() // Persist updated history to disk (throttled)
         
         recentSamples.append((time: now, down: deltaRx, up: deltaTx, dt: elapsed))
         let cutoffRecent = now.addingTimeInterval(-300)
         recentSamples.removeAll { $0.time < cutoffRecent }
+        
+        let currentDownPerSecond = Double(deltaRx) / elapsed
+        let currentUpPerSecond = Double(deltaTx) / elapsed
+        DispatchQueue.main.async {
+            if currentDownPerSecond > self.peakDownPerSecondBytes { self.peakDownPerSecondBytes = currentDownPerSecond }
+            if currentUpPerSecond > self.peakUpPerSecondBytes { self.peakUpPerSecondBytes = currentUpPerSecond }
+        }
 
         DispatchQueue.main.async {
             self.rates = BandwidthRates(
@@ -994,12 +1055,12 @@ final class BandwidthMonitor: ObservableObject {
         do {
             let data = try Data(contentsOf: historyURL)
             if let object = try? JSONDecoder().decode(PersistedData.self, from: data) {
-                let dayAgo = Date().addingTimeInterval(-86400)
+                let dayAgo = Date().addingTimeInterval(-35 * 86400)
                 history = object.history.filter { $0.timestamp >= dayAgo }
                 totalDownloadAllTime = object.totalDownloadAllTime
                 totalUploadAllTime = object.totalUploadAllTime
             } else if let old = try? JSONDecoder().decode([HistorySample].self, from: data) {
-                let dayAgo = Date().addingTimeInterval(-86400)
+                let dayAgo = Date().addingTimeInterval(-35 * 86400)
                 history = old.filter { $0.timestamp >= dayAgo }
                 totalDownloadAllTime = 0
                 totalUploadAllTime = 0
@@ -1019,9 +1080,48 @@ final class BandwidthMonitor: ObservableObject {
             self.prevRx = 0
             self.prevTx = 0
             self.isFirstSample = true
+            self.peakDownPerSecondBytes = 0
+            self.peakUpPerSecondBytes = 0
             self.saveHistory()
             self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
         }
+    }
+    
+    private func currentCycleStart(now: Date = Date()) -> Date {
+        let calendar = Calendar.current
+        let prefs = Preferences.shared
+        let billingDay = max(1, min(28, prefs.billingDay))
+        var components = calendar.dateComponents([.year, .month, .day], from: now)
+        if let day = components.day, day < billingDay {
+            // Cycle started last month
+            var prev = calendar.date(byAdding: .month, value: -1, to: now)!
+            var prevComp = calendar.dateComponents([.year, .month], from: prev)
+            prevComp.day = billingDay
+            return calendar.date(from: prevComp) ?? calendar.startOfDay(for: prev)
+        } else {
+            // Cycle started this month
+            var thisComp = calendar.dateComponents([.year, .month], from: now)
+            thisComp.day = billingDay
+            return calendar.date(from: thisComp) ?? calendar.startOfDay(for: now)
+        }
+    }
+
+    var totalsCurrentCycle: (download: UInt64, upload: UInt64) {
+        let start = currentCycleStart()
+        var totalRx: UInt64 = 0
+        var totalTx: UInt64 = 0
+        func safeDelta(newer: UInt64, older: UInt64) -> UInt64 {
+            if newer >= older { return newer &- older } else { return newer }
+        }
+        for i in 1..<history.count {
+            let t0 = history[i-1]
+            let t1 = history[i]
+            if t1.timestamp >= start {
+                totalRx &+= safeDelta(newer: t1.rx, older: t0.rx)
+                totalTx &+= safeDelta(newer: t1.tx, older: t0.tx)
+            }
+        }
+        return (totalRx, totalTx)
     }
 }
 
@@ -1068,6 +1168,35 @@ struct BandwidthTotalsView: View {
                         .foregroundColor(.red)
                 }
             }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Peak Rates (since launch/reset)").font(.headline)
+                HStack {
+                    Text("Down:")
+                    Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakDownPerSecondBytes), over: 1.0))
+                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.green)
+                    Spacer()
+                    Text("Up:")
+                    Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakUpPerSecondBytes), over: 1.0))
+                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.red)
+                }
+            }
+            
+            if Preferences.shared.dataCapEnabled {
+                let cycle = monitor.totalsCurrentCycle
+                let capBytes = UInt64(Preferences.shared.dataCapGB * 1000 * 1000 * 1000)
+                let usedBytes = cycle.download &+ cycle.upload
+                let remaining = capBytes > usedBytes ? capBytes &- usedBytes : 0
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Current Cycle Usage").font(.headline)
+                    Text("Used: \(BandwidthMonitor.formatTotal(bytes: usedBytes))  •  Remaining: \(BandwidthMonitor.formatTotal(bytes: remaining))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
             .padding(.top, 8)
             
             Button(role: .destructive) {
@@ -1089,7 +1218,7 @@ struct BandwidthTotalsView: View {
             
             Spacer()
         }
-        .frame(width: 320, height: 260)
+        .frame(width: 320, height: 320)
         .padding(18)
     }
 }
