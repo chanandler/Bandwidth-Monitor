@@ -762,23 +762,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - Bandwidth Monitor Implementation
 import Foundation
 
-struct BandwidthRates {
+struct BandwidthRates: Sendable {
     var download: String
     var upload: String
     var timestamp: Date // Add this field
 }
 
-private struct HistorySample: Codable {
+private struct HistorySample: Sendable {
     let timestamp: Date
     let rx: UInt64
     let tx: UInt64
 }
 
-private struct PersistedData: Codable {
+private struct PersistedData: Sendable {
     let history: [HistorySample]
     let totalDownloadAllTime: UInt64
     let totalUploadAllTime: UInt64
 }
+
+nonisolated(unsafe) extension HistorySample: Codable {}
+nonisolated(unsafe) extension PersistedData: Codable {}
 
 final class BandwidthMonitor: ObservableObject {
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
@@ -1037,7 +1040,14 @@ final class BandwidthMonitor: ObservableObject {
     
     // Save history array as JSON to disk atomically off main thread
     private func saveHistory() {
-        let snapshot = PersistedData(history: self.history, totalDownloadAllTime: self.totalDownloadAllTime, totalUploadAllTime: self.totalUploadAllTime)
+        // Take a main-actor snapshot of data that may be mutated on the main thread
+        let snapshot: PersistedData = {
+            let historyCopy = self.history
+            let dl = self.totalDownloadAllTime
+            let ul = self.totalUploadAllTime
+            return PersistedData(history: historyCopy, totalDownloadAllTime: dl, totalUploadAllTime: ul)
+        }()
+
         DispatchQueue.global(qos: .utility).async {
             do {
                 let data = try JSONEncoder().encode(snapshot)
@@ -1054,19 +1064,27 @@ final class BandwidthMonitor: ObservableObject {
             let data = try Data(contentsOf: historyURL)
             if let object = try? JSONDecoder().decode(PersistedData.self, from: data) {
                 let dayAgo = Date().addingTimeInterval(-35 * 86400)
-                history = object.history.filter { $0.timestamp >= dayAgo }
-                totalDownloadAllTime = object.totalDownloadAllTime
-                totalUploadAllTime = object.totalUploadAllTime
+                let filteredHistory = object.history.filter { $0.timestamp >= dayAgo }
+                DispatchQueue.main.async {
+                    self.history = filteredHistory
+                    self.totalDownloadAllTime = object.totalDownloadAllTime
+                    self.totalUploadAllTime = object.totalUploadAllTime
+                }
             } else if let old = try? JSONDecoder().decode([HistorySample].self, from: data) {
                 let dayAgo = Date().addingTimeInterval(-35 * 86400)
-                history = old.filter { $0.timestamp >= dayAgo }
-                totalDownloadAllTime = 0
-                totalUploadAllTime = 0
+                let filteredHistory = old.filter { $0.timestamp >= dayAgo }
+                DispatchQueue.main.async {
+                    self.history = filteredHistory
+                    self.totalDownloadAllTime = 0
+                    self.totalUploadAllTime = 0
+                }
             }
         } catch {
-            history = []
-            totalDownloadAllTime = 0
-            totalUploadAllTime = 0
+            DispatchQueue.main.async {
+                self.history = []
+                self.totalDownloadAllTime = 0
+                self.totalUploadAllTime = 0
+            }
         }
     }
     
@@ -1089,10 +1107,10 @@ final class BandwidthMonitor: ObservableObject {
         let calendar = Calendar.current
         let prefs = Preferences.shared
         let billingDay = max(1, min(28, prefs.billingDay))
-        var components = calendar.dateComponents([.year, .month, .day], from: now)
+        let components = calendar.dateComponents([.year, .month, .day], from: now)
         if let day = components.day, day < billingDay {
             // Cycle started last month
-            var prev = calendar.date(byAdding: .month, value: -1, to: now)!
+            let prev = calendar.date(byAdding: .month, value: -1, to: now)!
             var prevComp = calendar.dateComponents([.year, .month], from: prev)
             prevComp.day = billingDay
             return calendar.date(from: prevComp) ?? calendar.startOfDay(for: prev)
