@@ -53,7 +53,7 @@ struct ThemedBackground: ViewModifier {
         case .translucent:
             content.background(.ultraThinMaterial)
         case .solid:
-            content.background(Color(nsColor: .windowBackgroundColor))
+            content.background(Color(nsColor: .windowBackgroundColor)).ignoresSafeArea()
         }
     }
 }
@@ -596,10 +596,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch Preferences.shared.theme {
         case .solid:
             window.isOpaque = true
-            window.backgroundColor = .windowBackgroundColor
+            window.backgroundColor = NSColor.windowBackgroundColor
+            window.titlebarAppearsTransparent = false
         case .translucent:
             window.isOpaque = false
-            window.backgroundColor = .clear
+            window.backgroundColor = NSColor.clear
+            window.titlebarAppearsTransparent = true
         }
     }
     
