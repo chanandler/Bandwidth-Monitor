@@ -543,7 +543,7 @@ struct InterfacePickerView: View {
     }
     
     static func fetchInterfaces() -> [String] {
-        var names: [String] = []
+        var names: Set<String> = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
         if getifaddrs(&ifaddr) == 0 {
             var ptr = ifaddr
@@ -552,8 +552,11 @@ struct InterfacePickerView: View {
                 if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
                     if let c = ptr!.pointee.ifa_name {
                         let name = String(cString: c)
-                        if !names.contains(name) {
-                            names.append(name)
+                        // Only include Wi‑Fi and LAN (Ethernet) interfaces
+                        let isWiFi = (wifiBSDName != nil && name == wifiBSDName)
+                        let isEthernet = name.hasPrefix("en")
+                        if isWiFi || isEthernet {
+                            names.insert(name)
                         }
                     }
                 }
@@ -561,7 +564,7 @@ struct InterfacePickerView: View {
             }
             freeifaddrs(ifaddr)
         }
-        return names.sorted()
+        return Array(names).sorted()
     }
 }
 
