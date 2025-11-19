@@ -588,6 +588,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var tipWindowController: NSWindowController?
     var settingsWindowController: NSWindowController?
     
+    var solidHeaderMenuItem: NSMenuItem?
+    
     var themeCancellable: AnyCancellable?
 
     let tipJarManager = TipJarManager()
@@ -620,6 +622,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .translucent:
             popover.appearance = NSAppearance(named: .vibrantLight)
         }
+    }
+    
+    private func configureMenuHeader(for menu: NSMenu) {
+        // Remove existing header if present
+        if let header = solidHeaderMenuItem {
+            let idx = menu.index(of: header)
+            if idx != -1 { menu.removeItem(at: idx) }
+            solidHeaderMenuItem = nil
+        }
+
+        // Only add a solid header in Solid theme
+        guard Preferences.shared.theme == .solid else { return }
+
+        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 8))
+        headerView.wantsLayer = true
+        headerView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
+        let item = NSMenuItem()
+        item.view = headerView
+        // Insert at top
+        menu.insertItem(item, at: 0)
+        solidHeaderMenuItem = item
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -687,6 +711,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(tipJarItem)
 
         menu.addItem(NSMenuItem.separator())
+        
+        configureMenuHeader(for: menu)
 
         let quitItem = NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -773,6 +799,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 if let menu = self.statusItem.menu {
                     menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                    self.configureMenuHeader(for: menu)
                 }
                 self.statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
                 
