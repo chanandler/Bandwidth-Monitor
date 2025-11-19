@@ -41,7 +41,25 @@ struct AboutBandwidthManagerView: View {
         }
         .frame(width: 340, height: 190)
         .padding(.top, 0)
+        .themedBackground()
     }
+}
+
+// Helper ViewModifier to apply background based on theme
+struct ThemedBackground: ViewModifier {
+    @ObservedObject private var prefs = Preferences.shared
+    func body(content: Content) -> some View {
+        switch prefs.theme {
+        case .translucent:
+            content.background(.ultraThinMaterial)
+        case .solid:
+            content.background(Color(nsColor: .windowBackgroundColor))
+        }
+    }
+}
+
+extension View {
+    func themedBackground() -> some View { self.modifier(ThemedBackground()) }
 }
 
 // MARK: - Tip Jar
@@ -189,6 +207,7 @@ struct TipJarView: View {
             }
         }
         .padding(18)
+        .themedBackground()
         .task { await manager.load() }
     }
 }
@@ -196,6 +215,14 @@ struct TipJarView: View {
 // MARK: - Preferences & Settings
 final class Preferences: ObservableObject {
     static let shared = Preferences()
+    
+    enum Theme: String, CaseIterable, Identifiable {
+        case translucent
+        case solid
+        var id: String { rawValue }
+        var displayName: String { self == .translucent ? "Translucent" : "Solid" }
+    }
+    
     @Published var launchAtLogin: Bool {
         didSet { Self.setLaunchAtLogin(launchAtLogin) }
     }
@@ -234,6 +261,9 @@ final class Preferences: ObservableObject {
     @Published var billingDay: Int {
         didSet { UserDefaults.standard.set(billingDay, forKey: "billingDay") }
     }
+    @Published var theme: Theme {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: "themePreference") }
+    }
 
     private init() {
         // Initialize from system/user defaults
@@ -251,6 +281,12 @@ final class Preferences: ObservableObject {
         self.dataCapEnabled = UserDefaults.standard.object(forKey: "dataCapEnabled") as? Bool ?? false
         self.dataCapGB = UserDefaults.standard.object(forKey: "dataCapGB") as? Double ?? 500.0
         self.billingDay = UserDefaults.standard.object(forKey: "billingDay") as? Int ?? 1
+        
+        if let raw = UserDefaults.standard.string(forKey: "themePreference"), let t = Theme(rawValue: raw) {
+            self.theme = t
+        } else {
+            self.theme = .translucent
+        }
     }
 
     // MARK: Launch at Login helpers
@@ -356,6 +392,17 @@ struct SettingsView: View {
             .padding(.top, 8)
             
             VStack(alignment: .leading, spacing: 8) {
+                Text("Appearance").font(.headline)
+                Picker("Theme", selection: $prefs.theme) {
+                    ForEach(Preferences.Theme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Interfaces").font(.headline)
                 Text("Select interfaces to include. Leave empty to include all.").font(.footnote).foregroundStyle(.secondary)
                 InterfacePickerView(selected: $prefs.selectedInterfaces)
@@ -412,6 +459,7 @@ struct SettingsView: View {
             }
         }
         .padding(18)
+        .themedBackground()
     }
     
     private func relaunchApp() {
@@ -1277,6 +1325,7 @@ struct BandwidthTotalsView: View {
         }
         .frame(width: 320, height: 320)
         .padding(18)
+        .themedBackground()
     }
 }
 
