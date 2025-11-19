@@ -320,12 +320,20 @@ final class Preferences: ObservableObject {
 }
 
 struct SettingsView: View {
+    let forceSolidBackground: Bool
+
+    init(forceSolidBackground: Bool = false, onClose: (() -> Void)? = nil) {
+        self.forceSolidBackground = forceSolidBackground
+        self.onClose = onClose
+    }
+
     @ObservedObject private var prefs = Preferences.shared
     var onClose: (() -> Void)?
     @State private var showRelaunchHint = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // Build the main content once
+        let content = VStack(alignment: .leading, spacing: 16) {
             Text("Settings").font(.title2).bold()
 
             Toggle(isOn: Binding(
@@ -459,7 +467,16 @@ struct SettingsView: View {
             }
         }
         .padding(18)
-        .themedBackground()
+
+        // Conditionally return either solid white or themed background
+        if forceSolidBackground {
+            content
+                .background(Color(nsColor: .windowBackgroundColor))
+                .ignoresSafeArea(edges: .all)
+        } else {
+            content
+                .themedBackground()
+        }
     }
     
     private func relaunchApp() {
@@ -579,7 +596,7 @@ struct MenuBarBandwidthMonitorApp: App {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var monitor: BandwidthMonitor!
     var timerCancellable: AnyCancellable?
@@ -589,6 +606,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindowController: NSWindowController?
     
     var solidHeaderMenuItem: NSMenuItem?
+    var solidFooterMenuItem: NSMenuItem?
     
     var themeCancellable: AnyCancellable?
 
@@ -645,6 +663,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.insertItem(item, at: 0)
         solidHeaderMenuItem = item
     }
+    
+    private func prepareMenuForDisplay(_ menu: NSMenu) {
+        // Remove previous header/footer if present
+        if let header = solidHeaderMenuItem {
+            let idx = menu.index(of: header)
+            if idx != -1 { menu.removeItem(at: idx) }
+            solidHeaderMenuItem = nil
+        }
+        if let footer = solidFooterMenuItem {
+            let idx = menu.index(of: footer)
+            if idx != -1 { menu.removeItem(at: idx) }
+            solidFooterMenuItem = nil
+        }
+
+        guard Preferences.shared.theme == .solid else { return }
+
+        // Create an opaque white header and footer to disable vibrancy
+        let headerView = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 8))
+        headerView.wantsLayer = true
+        headerView.layer?.backgroundColor = NSColor.white.cgColor
+
+        let footerView = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 8))
+        footerView.wantsLayer = true
+        footerView.layer?.backgroundColor = NSColor.white.cgColor
+
+        let headerItem = NSMenuItem()
+        headerItem.view = headerView
+        let footerItem = NSMenuItem()
+        footerItem.view = footerView
+
+        // Insert header at top and footer at bottom
+        menu.insertItem(headerItem, at: 0)
+        menu.addItem(footerItem)
+
+        solidHeaderMenuItem = headerItem
+        solidFooterMenuItem = footerItem
+    }
+    
+    func menuWillOpen(_ menu: NSMenu) {
+        prepareMenuForDisplay(menu)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if UserDefaults.standard.bool(forKey: "runAsHiddenService") {
@@ -691,8 +750,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.cell?.wraps = false
         }
 
+        // Apply solid background behind the status item text when using Solid theme
+        if let button = statusItem.button {
+            button.wantsLayer = true
+            if Preferences.shared.theme == .solid {
+                // White pill background for solid theme
+                button.layer?.backgroundColor = NSColor.white.cgColor
+                button.layer?.cornerRadius = 6
+                button.layer?.masksToBounds = true
+                // Ensure readable tint on white
+                if #available(macOS 10.14, *) {
+                    button.contentTintColor = NSColor.labelColor
+                }
+            } else {
+                // Clear background for translucent theme
+                button.layer?.backgroundColor = NSColor.clear.cgColor
+                button.layer?.cornerRadius = 0
+                if #available(macOS 10.14, *) {
+                    button.contentTintColor = nil
+                }
+            }
+        }
+
         // Menu: About, Open Statistics, Settings, Tip Jar, separator, Quit
         let menu = NSMenu()
+        menu.delegate = self
 
         let aboutItem = NSMenuItem(title: "About Bandwidth Monitor", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
@@ -712,7 +794,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
         
-        configureMenuHeader(for: menu)
+        // Removed call to configureMenuHeader(for: menu)
 
         let quitItem = NSMenuItem(title: "Quit Bandwidth Monitor", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -799,7 +881,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 if let menu = self.statusItem.menu {
                     menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
-                    self.configureMenuHeader(for: menu)
+                    self.prepareMenuForDisplay(menu)
                 }
                 self.statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
                 
@@ -816,13 +898,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 if let w = self.settingsWindowController?.window {
-                    self.applyTheme(to: w)
+                    // Force settings window to remain solid and white regardless of theme
+                    w.isOpaque = true
+                    w.backgroundColor = .white
+                    w.titlebarAppearsTransparent = false
                     if let vc = self.settingsWindowController?.contentViewController {
-                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                        vc.view.appearance = NSAppearance(named: .aqua)
                     }
                 }
                 if let p = self.detailsPopover {
                     self.applyTheme(to: p)
+                }
+                // Re-apply solid/clear background for the status item when theme changes
+                if let button = self.statusItem.button {
+                    button.wantsLayer = true
+                    if Preferences.shared.theme == .solid {
+                        button.layer?.backgroundColor = NSColor.white.cgColor
+                        button.layer?.cornerRadius = 6
+                        button.layer?.masksToBounds = true
+                        if #available(macOS 10.14, *) {
+                            button.contentTintColor = NSColor.labelColor
+                        }
+                    } else {
+                        button.layer?.backgroundColor = NSColor.clear.cgColor
+                        button.layer?.cornerRadius = 0
+                        if #available(macOS 10.14, *) {
+                            button.contentTintColor = nil
+                        }
+                    }
                 }
             }
     }
@@ -893,7 +996,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             win.window?.makeKeyAndOrderFront(nil)
             return
         }
-        let contentView = SettingsView { [weak self] in
+        let contentView = SettingsView(forceSolidBackground: true) { [weak self] in
             self?.settingsWindowController?.close()
             self?.settingsWindowController = nil
         }
@@ -904,6 +1007,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentMinSize = NSSize(width: 420, height: 320)
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
+
+        // Make window opaque and white to match forced solid background in view
+        window.isOpaque = true
+        window.backgroundColor = .white
+        window.titlebarAppearsTransparent = false
 
         if Preferences.shared.theme == .solid {
             hosting.view.appearance = NSAppearance(named: .aqua)
@@ -969,10 +1077,10 @@ private struct PersistedData: Sendable {
     let totalUploadAllTime: UInt64
 }
 
-nonisolated(unsafe) extension HistorySample: Codable {}
-nonisolated(unsafe) extension PersistedData: Codable {}
+nonisolated extension HistorySample: Codable {}
+nonisolated extension PersistedData: Codable {}
 
-final class BandwidthMonitor: ObservableObject {
+@MainActor final class BandwidthMonitor: ObservableObject {
     @Published var rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     @Published var recentSamples: [(time: Date, down: UInt64, up: UInt64, dt: TimeInterval)] = []
     @Published var peakDownPerSecondBytes: Double = 0
@@ -1046,6 +1154,7 @@ final class BandwidthMonitor: ObservableObject {
         loadHistory() // Load history from disk on startup
         samplingCancellable = Preferences.shared.$samplingInterval
             .removeDuplicates()
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.rescheduleTimerIfNeeded()
             }
@@ -1058,7 +1167,10 @@ final class BandwidthMonitor: ObservableObject {
         // Use strict leeway to reduce jitter
         source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         source.setEventHandler { [weak self] in
-            self?.poll()
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.poll()
+            }
         }
         timerSource = source
         source.resume()
@@ -1080,7 +1192,10 @@ final class BandwidthMonitor: ObservableObject {
         let source = DispatchSource.makeTimerSource(queue: timerQueue)
         source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         source.setEventHandler { [weak self] in
-            self?.poll()
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.poll()
+            }
         }
         timerSource = source
         source.resume()
@@ -1130,13 +1245,9 @@ final class BandwidthMonitor: ObservableObject {
         history.removeAll { $0.timestamp < cutoff }
         saveHistoryIfNeeded() // Persist updated history to disk (throttled)
         
-        recentSamples.append((time: now, down: deltaRx, up: deltaTx, dt: elapsed))
-        let cutoffRecent = now.addingTimeInterval(-300)
-        recentSamples.removeAll { $0.time < cutoffRecent }
-        
         let currentDownPerSecond = Double(deltaRx) / elapsed
         let currentUpPerSecond = Double(deltaTx) / elapsed
-        
+
         // Update smoothing buffers (moving average over last `smoothWindow` samples)
         recentDownRates.append(currentDownPerSecond)
         recentUpRates.append(currentUpPerSecond)
@@ -1145,15 +1256,22 @@ final class BandwidthMonitor: ObservableObject {
         let avgDown = recentDownRates.isEmpty ? 0 : (recentDownRates.reduce(0, +) / Double(recentDownRates.count))
         let avgUp = recentUpRates.isEmpty ? 0 : (recentUpRates.reduce(0, +) / Double(recentUpRates.count))
 
-        DispatchQueue.main.async {
-            if avgDown > self.peakDownPerSecondBytes { self.peakDownPerSecondBytes = avgDown }
-            if avgUp > self.peakUpPerSecondBytes { self.peakUpPerSecondBytes = avgUp }
-            self.rates = BandwidthRates(
-                download: BandwidthMonitor.format(bytes: UInt64(avgDown), over: 1.0),
-                upload: BandwidthMonitor.format(bytes: UInt64(avgUp), over: 1.0),
-                timestamp: now
-            )
-        }
+        // Publish updates (MainActor enforced by class annotation)
+        // Update recentSamples (published)
+        self.recentSamples.append((time: now, down: deltaRx, up: deltaTx, dt: elapsed))
+        let cutoffRecent = now.addingTimeInterval(-300)
+        self.recentSamples.removeAll { $0.time < cutoffRecent }
+
+        // Update peaks (published)
+        if avgDown > self.peakDownPerSecondBytes { self.peakDownPerSecondBytes = avgDown }
+        if avgUp > self.peakUpPerSecondBytes { self.peakUpPerSecondBytes = avgUp }
+
+        // Update rates (published)
+        self.rates = BandwidthRates(
+            download: BandwidthMonitor.format(bytes: UInt64(avgDown), over: 1.0),
+            upload: BandwidthMonitor.format(bytes: UInt64(avgUp), over: 1.0),
+            timestamp: now
+        )
     }
     
     private func getPerInterfaceBytes() -> [(name: String, rx: UInt64, tx: UInt64)] {
@@ -1278,11 +1396,13 @@ final class BandwidthMonitor: ObservableObject {
             let ul = self.totalUploadAllTime
             return PersistedData(history: historyCopy, totalDownloadAllTime: dl, totalUploadAllTime: ul)
         }()
+        // Capture URL on the main actor to avoid crossing actor boundaries in the background closure
+        let url = self.historyURL
 
         DispatchQueue.global(qos: .utility).async {
             do {
                 let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: self.historyURL, options: .atomic)
+                try data.write(to: url, options: .atomic)
             } catch {
                 // ignore errors
             }
@@ -1296,42 +1416,34 @@ final class BandwidthMonitor: ObservableObject {
             if let object = try? JSONDecoder().decode(PersistedData.self, from: data) {
                 let dayAgo = Date().addingTimeInterval(-35 * 86400)
                 let filteredHistory = object.history.filter { $0.timestamp >= dayAgo }
-                DispatchQueue.main.async {
-                    self.history = filteredHistory
-                    self.totalDownloadAllTime = object.totalDownloadAllTime
-                    self.totalUploadAllTime = object.totalUploadAllTime
-                }
+                self.history = filteredHistory
+                self.totalDownloadAllTime = object.totalDownloadAllTime
+                self.totalUploadAllTime = object.totalUploadAllTime
             } else if let old = try? JSONDecoder().decode([HistorySample].self, from: data) {
                 let dayAgo = Date().addingTimeInterval(-35 * 86400)
                 let filteredHistory = old.filter { $0.timestamp >= dayAgo }
-                DispatchQueue.main.async {
-                    self.history = filteredHistory
-                    self.totalDownloadAllTime = 0
-                    self.totalUploadAllTime = 0
-                }
-            }
-        } catch {
-            DispatchQueue.main.async {
-                self.history = []
+                self.history = filteredHistory
                 self.totalDownloadAllTime = 0
                 self.totalUploadAllTime = 0
             }
+        } catch {
+            self.history = []
+            self.totalDownloadAllTime = 0
+            self.totalUploadAllTime = 0
         }
     }
     
     func resetTotals() {
-        DispatchQueue.main.async {
-            self.history = []
-            self.totalDownloadAllTime = 0
-            self.totalUploadAllTime = 0
-            self.prevRx = 0
-            self.prevTx = 0
-            self.isFirstSample = true
-            self.peakDownPerSecondBytes = 0
-            self.peakUpPerSecondBytes = 0
-            self.saveHistory()
-            self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
-        }
+        self.history = []
+        self.totalDownloadAllTime = 0
+        self.totalUploadAllTime = 0
+        self.prevRx = 0
+        self.prevTx = 0
+        self.isFirstSample = true
+        self.peakDownPerSecondBytes = 0
+        self.peakUpPerSecondBytes = 0
+        self.saveHistory()
+        self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     }
     
     private func currentCycleStart(now: Date = Date()) -> Date {
