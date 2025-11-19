@@ -692,7 +692,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
+        menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+
         statusItem.menu = menu
+
+        statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
 
         monitor = BandwidthMonitor()
 
@@ -702,12 +706,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] (rates: BandwidthRates) in
                 guard let self = self else { return }
                 let title = "↓ \(rates.download) ↑ \(rates.upload)"
+                let isSolid = (Preferences.shared.theme == .solid)
+
                 // Build attributed string with green download and red upload
                 let fullString = NSMutableAttributedString(string: title)
                 let fullRange = NSRange(location: 0, length: fullString.length)
 
                 // Use a darker green for download text
-                let darkGreen = NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0)
+                // let darkGreen = NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0)
 
                 // Helper to bold numeric parts (digits, dots, commas) in a given range
                 func boldNumbers(in attributed: NSMutableAttributedString, title: String, range: NSRange) {
@@ -725,14 +731,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 // Default attributes
-                fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+                let labelColor: NSColor = isSolid ? NSColor.labelColor : NSColor.labelColor
+                fullString.addAttribute(.foregroundColor, value: labelColor, range: fullRange)
                 fullString.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular), range: fullRange)
 
                 // Find range of download part: "↓ \(rates.download)"
                 let downloadString = "↓ \(rates.download)"
                 if let downloadRange = title.range(of: downloadString) {
                     let nsDownloadRange = NSRange(downloadRange, in: title)
-                    fullString.addAttribute(.foregroundColor, value: darkGreen, range: nsDownloadRange)
+                    let downloadColor: NSColor = isSolid ? NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0) : NSColor.systemGreen
+                    fullString.addAttribute(.foregroundColor, value: downloadColor, range: nsDownloadRange)
                     // Bold the numeric portion of the download string
                     boldNumbers(in: fullString, title: title, range: nsDownloadRange)
                 }
@@ -741,7 +749,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let uploadString = "↑ \(rates.upload)"
                 if let uploadRange = title.range(of: uploadString) {
                     let nsUploadRange = NSRange(uploadRange, in: title)
-                    fullString.addAttribute(.foregroundColor, value: NSColor.systemRed, range: nsUploadRange)
+                    let uploadColor: NSColor = NSColor.systemRed
+                    fullString.addAttribute(.foregroundColor, value: uploadColor, range: nsUploadRange)
                     // Bold the numeric portion of the upload string
                     boldNumbers(in: fullString, title: title, range: nsUploadRange)
                 }
@@ -749,6 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Set the attributed string to statusItem.button
                 self.statusItem.button?.attributedTitle = fullString
                 // self.statusItem.button?.title = title // old line commented out
+                self.statusItem.button?.appearance = NSAppearance(named: isSolid ? .aqua : .vibrantLight)
 
                 self.statusItem.button?.toolTip = "Download: \(rates.download)\nUpload: \(rates.upload)"
             }
@@ -760,6 +770,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 NSApp.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                
+                if let menu = self.statusItem.menu {
+                    menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                }
+                self.statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                
                 if let w = self.aboutWindowController?.window {
                     self.applyTheme(to: w)
                     if let vc = self.aboutWindowController?.contentViewController {
