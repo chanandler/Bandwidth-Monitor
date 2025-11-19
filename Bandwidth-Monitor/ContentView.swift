@@ -584,8 +584,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var aboutWindowController: NSWindowController?
     var tipWindowController: NSWindowController?
     var settingsWindowController: NSWindowController?
+    
+    var themeCancellable: AnyCancellable?
 
     let tipJarManager = TipJarManager()
+    
+    private func applyTheme(to window: NSWindow) {
+        switch Preferences.shared.theme {
+        case .solid:
+            window.isOpaque = true
+            window.backgroundColor = .windowBackgroundColor
+        case .translucent:
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
+    }
+    
+    private func applyTheme(to popover: NSPopover) {
+        switch Preferences.shared.theme {
+        case .solid:
+            popover.appearance = NSAppearance(named: .aqua)
+        case .translucent:
+            popover.appearance = NSAppearance(named: .vibrantLight)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if UserDefaults.standard.bool(forKey: "runAsHiddenService") {
@@ -717,6 +739,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         monitor.start()
+        
+        themeCancellable = Preferences.shared.$theme
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                if let w = self.aboutWindowController?.window { self.applyTheme(to: w) }
+                if let w = self.tipWindowController?.window { self.applyTheme(to: w) }
+                if let w = self.settingsWindowController?.window { self.applyTheme(to: w) }
+                if let p = self.detailsPopover { self.applyTheme(to: p) }
+            }
     }
 
     @objc func showAbout(_ sender: Any?) {
@@ -736,6 +768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.styleMask.insert(NSWindow.StyleMask.titled)
         window.styleMask.insert(NSWindow.StyleMask.closable)
         window.isReleasedWhenClosed = false
+        applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.aboutWindowController = controller
         controller.showWindow(self)
@@ -758,6 +791,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentMinSize = NSSize(width: 340, height: 220)
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
+        applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.tipWindowController = controller
         controller.showWindow(self)
@@ -780,6 +814,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentMinSize = NSSize(width: 380, height: 200)
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
+        applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.settingsWindowController = controller
         controller.showWindow(self)
@@ -796,6 +831,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentSize = NSSize(width: 340, height: 210)
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
+        applyTheme(to: popover)
         if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             detailsPopover = popover
