@@ -593,15 +593,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let tipJarManager = TipJarManager()
     
     private func applyTheme(to window: NSWindow) {
+        // Always use a layer-backed content view so SwiftUI materials render reliably
+        window.contentView?.wantsLayer = true
+
         switch Preferences.shared.theme {
         case .solid:
             window.isOpaque = true
             window.backgroundColor = NSColor.windowBackgroundColor
             window.titlebarAppearsTransparent = false
+            // Solid appearance for Aqua
+            window.appearance = NSAppearance(named: .aqua)
         case .translucent:
+            // Keep the window drawable and layer-backed; avoid fully transparent window background
             window.isOpaque = false
-            window.backgroundColor = NSColor.clear
+            window.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.001)
             window.titlebarAppearsTransparent = true
+            // Vibrant appearance to match translucent content
+            window.appearance = NSAppearance(named: .vibrantLight)
         }
     }
     
@@ -620,6 +628,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSApp.setActivationPolicy(.regular)
         }
+
+        NSApp.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
 
         tipJarManager.startListeningForTransactions()
 
@@ -749,10 +759,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                if let w = self.aboutWindowController?.window { self.applyTheme(to: w) }
-                if let w = self.tipWindowController?.window { self.applyTheme(to: w) }
-                if let w = self.settingsWindowController?.window { self.applyTheme(to: w) }
-                if let p = self.detailsPopover { self.applyTheme(to: p) }
+                NSApp.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                if let w = self.aboutWindowController?.window {
+                    self.applyTheme(to: w)
+                    if let vc = self.aboutWindowController?.contentViewController {
+                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                    }
+                }
+                if let w = self.tipWindowController?.window {
+                    self.applyTheme(to: w)
+                    if let vc = self.tipWindowController?.contentViewController {
+                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                    }
+                }
+                if let w = self.settingsWindowController?.window {
+                    self.applyTheme(to: w)
+                    if let vc = self.settingsWindowController?.contentViewController {
+                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                    }
+                }
+                if let p = self.detailsPopover {
+                    self.applyTheme(to: p)
+                }
             }
     }
 
@@ -773,6 +801,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.styleMask.insert(NSWindow.StyleMask.titled)
         window.styleMask.insert(NSWindow.StyleMask.closable)
         window.isReleasedWhenClosed = false
+
+        if Preferences.shared.theme == .solid {
+            hosting.view.appearance = NSAppearance(named: .aqua)
+        } else {
+            hosting.view.appearance = NSAppearance(named: .vibrantLight)
+        }
+
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.aboutWindowController = controller
@@ -796,6 +831,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentMinSize = NSSize(width: 340, height: 220)
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
+
+        if Preferences.shared.theme == .solid {
+            hosting.view.appearance = NSAppearance(named: .aqua)
+        } else {
+            hosting.view.appearance = NSAppearance(named: .vibrantLight)
+        }
+
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.tipWindowController = controller
@@ -815,10 +857,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hosting = NSHostingController(rootView: contentView)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Settings"
-        window.setContentSize(NSSize(width: 420, height: 220))
-        window.contentMinSize = NSSize(width: 380, height: 200)
+        window.setContentSize(NSSize(width: 520, height: 420))
+        window.contentMinSize = NSSize(width: 420, height: 320)
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
+
+        if Preferences.shared.theme == .solid {
+            hosting.view.appearance = NSAppearance(named: .aqua)
+        } else {
+            hosting.view.appearance = NSAppearance(named: .vibrantLight)
+        }
+
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.settingsWindowController = controller
@@ -835,7 +884,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.contentSize = NSSize(width: 340, height: 210)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
+        
+        let hostingController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
+        if Preferences.shared.theme == .solid {
+            hostingController.view.appearance = NSAppearance(named: .aqua)
+        } else {
+            hostingController.view.appearance = NSAppearance(named: .vibrantLight)
+        }
+        popover.contentViewController = hostingController
+        
         applyTheme(to: popover)
         if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
