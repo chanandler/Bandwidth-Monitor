@@ -792,6 +792,7 @@ final class BandwidthMonitor: ObservableObject {
     private var timer: Timer?
     private var prevRx: UInt64 = 0
     private var prevTx: UInt64 = 0
+    private var lastInterfaceSet: Set<String> = []
     private var isFirstSample = true
     // Store history as array of HistorySample for codable persistence
     private var history: [HistorySample] = []
@@ -878,19 +879,30 @@ final class BandwidthMonitor: ObservableObject {
     
     private func poll() {
         let now = Date()
-        let (rx, tx) = getNetworkBytes()
+        let (rx, tx, names) = getNetworkBytes()
         if isFirstSample {
             prevRx = rx
             prevTx = tx
             lastSampleDate = now
+            lastInterfaceSet = names
             isFirstSample = false
             return
         }
         let elapsed = max(0.001, now.timeIntervalSince(lastSampleDate ?? now))
         lastSampleDate = now
-        // Handle counter wraparound (interface reset or overflow)
-        let deltaRx: UInt64 = rx >= prevRx ? rx - prevRx : rx
-        let deltaTx: UInt64 = tx >= prevTx ? tx - prevTx : tx
+        
+        // Detect interface set changes to avoid over-counting when counters reset or interfaces change
+        var interfaceSetChanged = false
+        if lastInterfaceSet != names {
+            interfaceSetChanged = true
+            lastInterfaceSet = names
+        }
+        
+        // Handle counter wraparound (interface reset or overflow) and interface set changes
+        let rawDeltaRx: UInt64 = rx >= prevRx ? rx &- prevRx : rx
+        let rawDeltaTx: UInt64 = tx >= prevTx ? tx &- prevTx : tx
+        let deltaRx: UInt64 = interfaceSetChanged ? 0 : rawDeltaRx
+        let deltaTx: UInt64 = interfaceSetChanged ? 0 : rawDeltaTx
         
         prevRx = rx
         prevTx = tx
@@ -950,7 +962,7 @@ final class BandwidthMonitor: ObservableObject {
         return results
     }
     
-    private func getNetworkBytes() -> (UInt64, UInt64) {
+    private func getNetworkBytes() -> (UInt64, UInt64, Set<String>) {
         let interfaces = getPerInterfaceBytes()
         let selected = Preferences.shared.selectedInterfaces
         let ignoredPrefixes = ["awdl", "llw", "utun", "bridge", "ap", "p2p"]
@@ -964,7 +976,8 @@ final class BandwidthMonitor: ObservableObject {
         }
         let rx = filtered.reduce(0) { $0 &+ $1.rx }
         let tx = filtered.reduce(0) { $0 &+ $1.tx }
-        return (rx, tx)
+        let names = Set(filtered.map { $0.name })
+        return (rx, tx, names)
     }
     
     static func format(bytes: UInt64) -> String {
