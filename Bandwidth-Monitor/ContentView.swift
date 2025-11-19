@@ -789,10 +789,15 @@ final class BandwidthMonitor: ObservableObject {
     @Published var peakDownPerSecondBytes: Double = 0
     @Published var peakUpPerSecondBytes: Double = 0
     
-    private var timer: Timer?
+    private var timerSource: DispatchSourceTimer?
+    private let timerQueue = DispatchQueue(label: "net.bandwidth.monitor.timer", qos: .userInitiated)
     private var prevRx: UInt64 = 0
     private var prevTx: UInt64 = 0
     private var lastInterfaceSet: Set<String> = []
+    private var interfaceChangeSuppressCount: Int = 0 // number of upcoming samples to suppress
+    private var smoothWindow: Int = 5
+    private var recentDownRates: [Double] = [] // bytes/sec per sample
+    private var recentUpRates: [Double] = []
     private var isFirstSample = true
     // Store history as array of HistorySample for codable persistence
     private var history: [HistorySample] = []
@@ -858,23 +863,38 @@ final class BandwidthMonitor: ObservableObject {
     }
     
     func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: prefs.samplingInterval, repeats: true) { [weak self] _ in
+        stop()
+        let interval = max(0.25, prefs.samplingInterval)
+        let source = DispatchSource.makeTimerSource(queue: timerQueue)
+        // Use strict leeway to reduce jitter
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
+        source.setEventHandler { [weak self] in
             self?.poll()
         }
+        timerSource = source
+        source.resume()
     }
     
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        timerSource?.cancel()
+        timerSource = nil
         saveHistory() // Save the history when stopping monitoring
+        // Reset smoothing buffers
+        recentDownRates.removeAll(keepingCapacity: true)
+        recentUpRates.removeAll(keepingCapacity: true)
     }
     
     private func rescheduleTimerIfNeeded() {
-        let interval = prefs.samplingInterval
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: max(0.25, interval), repeats: true) { [weak self] _ in
+        let interval = max(0.25, prefs.samplingInterval)
+        timerSource?.cancel()
+        timerSource = nil
+        let source = DispatchSource.makeTimerSource(queue: timerQueue)
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
+        source.setEventHandler { [weak self] in
             self?.poll()
         }
+        timerSource = source
+        source.resume()
     }
     
     private func poll() {
@@ -888,21 +908,24 @@ final class BandwidthMonitor: ObservableObject {
             isFirstSample = false
             return
         }
-        let elapsed = max(0.001, now.timeIntervalSince(lastSampleDate ?? now))
+        let elapsed = max(0.2, now.timeIntervalSince(lastSampleDate ?? now))
         lastSampleDate = now
-        
-        // Detect interface set changes to avoid over-counting when counters reset or interfaces change
+
+        // Detect interface set changes and suppress next 2 samples to avoid spikes
         var interfaceSetChanged = false
         if lastInterfaceSet != names {
             interfaceSetChanged = true
             lastInterfaceSet = names
+            interfaceChangeSuppressCount = 2
         }
         
         // Handle counter wraparound (interface reset or overflow) and interface set changes
         let rawDeltaRx: UInt64 = rx >= prevRx ? rx &- prevRx : rx
         let rawDeltaTx: UInt64 = tx >= prevTx ? tx &- prevTx : tx
-        let deltaRx: UInt64 = interfaceSetChanged ? 0 : rawDeltaRx
-        let deltaTx: UInt64 = interfaceSetChanged ? 0 : rawDeltaTx
+        let suppress = interfaceSetChanged || interfaceChangeSuppressCount > 0
+        let deltaRx: UInt64 = suppress ? 0 : rawDeltaRx
+        let deltaTx: UInt64 = suppress ? 0 : rawDeltaTx
+        if interfaceChangeSuppressCount > 0 { interfaceChangeSuppressCount -= 1 }
         
         prevRx = rx
         prevTx = tx
@@ -924,15 +947,21 @@ final class BandwidthMonitor: ObservableObject {
         
         let currentDownPerSecond = Double(deltaRx) / elapsed
         let currentUpPerSecond = Double(deltaTx) / elapsed
-        DispatchQueue.main.async {
-            if currentDownPerSecond > self.peakDownPerSecondBytes { self.peakDownPerSecondBytes = currentDownPerSecond }
-            if currentUpPerSecond > self.peakUpPerSecondBytes { self.peakUpPerSecondBytes = currentUpPerSecond }
-        }
+        
+        // Update smoothing buffers (moving average over last `smoothWindow` samples)
+        recentDownRates.append(currentDownPerSecond)
+        recentUpRates.append(currentUpPerSecond)
+        if recentDownRates.count > smoothWindow { recentDownRates.removeFirst(recentDownRates.count - smoothWindow) }
+        if recentUpRates.count > smoothWindow { recentUpRates.removeFirst(recentUpRates.count - smoothWindow) }
+        let avgDown = recentDownRates.isEmpty ? 0 : (recentDownRates.reduce(0, +) / Double(recentDownRates.count))
+        let avgUp = recentUpRates.isEmpty ? 0 : (recentUpRates.reduce(0, +) / Double(recentUpRates.count))
 
         DispatchQueue.main.async {
+            if avgDown > self.peakDownPerSecondBytes { self.peakDownPerSecondBytes = avgDown }
+            if avgUp > self.peakUpPerSecondBytes { self.peakUpPerSecondBytes = avgUp }
             self.rates = BandwidthRates(
-                download: Self.format(bytes: deltaRx, over: elapsed),
-                upload: Self.format(bytes: deltaTx, over: elapsed),
+                download: BandwidthMonitor.format(bytes: UInt64(avgDown), over: 1.0),
+                upload: BandwidthMonitor.format(bytes: UInt64(avgUp), over: 1.0),
                 timestamp: now
             )
         }
