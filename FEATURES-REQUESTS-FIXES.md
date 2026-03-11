@@ -110,6 +110,12 @@ The monitor already calls `getPerInterfaceBytes()` internally but aggregates eve
 **27. ~~Notification Center / desktop widget~~** ✅ Completed in v3.1
 ~~A WidgetKit widget (small and medium sizes) showing last 24 h download/upload totals, current billing cycle usage, data cap progress bar, and peak speeds. Data is written to a shared App Group store by the main app every ~60 seconds and the widget refreshes every 15 minutes or whenever the main app triggers a reload.~~
 
+**28. Subtle tip jar nudge**
+A gentle, non-intrusive reminder that encourages users to support the app via the Tip Jar. Should appear in a few places:
+- A small "enjoying the app? Buy me a coffee ☕" line with a clickable link in the Statistics view
+- A soft prompt in the About window beneath the version number
+- An occasional (e.g. once every 30 days) banner notification — only shown to users who have never tipped, and never shown more than 3 times total so it never becomes annoying
+
 ---
 
 ## Fixes

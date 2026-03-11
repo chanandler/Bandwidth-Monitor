@@ -1586,8 +1586,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Show onboarding on first launch
-        if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+        // Show onboarding on first launch or when a major version bump requires it
+        let currentOnboardingVersion = 1
+        if UserDefaults.standard.integer(forKey: "completedOnboardingVersion") < currentOnboardingVersion {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.showOnboarding()
             }
