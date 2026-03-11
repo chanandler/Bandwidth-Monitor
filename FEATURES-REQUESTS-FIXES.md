@@ -55,11 +55,11 @@ The translucent theme uses `.vibrantLight` hardcoded everywhere. Adding `.vibran
 **10. Keyboard shortcut to open Statistics**
 A global hotkey (configurable) to pop open the Statistics panel without clicking the menu bar.
 
-**11. "Speed test" shortcut**
-A menu item that opens Fast.com or Speedtest.net directly — small but handy when you notice rates look low.
+**11. ~~"Speed test" shortcut~~** ✅ Completed in v3.0
+~~A menu item that opens Fast.com or Speedtest.net directly — small but handy when you notice rates look low.~~
 
-**12. Localisation**
-The app is English-only. Adding at least one or two major languages (e.g. French, German) would widen the App Store audience.
+**12. ~~Localisation~~** ✅ Completed in v3.0
+~~The app is English-only. Adding at least one or two major languages (e.g. French, German) would widen the App Store audience.~~
 
 ---
 
@@ -114,4 +114,6 @@ Test notification button and data cap alerts were silently suppressed when the S
 - v3.0 — Settings: data cap size replaced with dropdown picker (1 GB – 1 TB) + typed text field
 - v3.0 — Settings: test notification button added to Data Cap section
 - v3.0 — Fix: notifications now display as banners when app is active (`UNUserNotificationCenterDelegate` + `willPresent`)
-- v3.0 — Onboarding: 6-step first-launch walkthrough covering welcome, theme, units, data cap, notifications, and finish; never shown again after completion
+- v3.0 — Onboarding: 7-step first-launch walkthrough covering language, welcome, theme, units, data cap, notifications, and finish; versioned so major updates can re-trigger it for existing users
+- v3.0 — Localisation: full English, French (Français), and German (Deutsch) support via in-app `L` struct; language picker in onboarding step 1 and in Settings; defaults to system locale if supported
+- v3.0 — Speed Test shortcut: "Speed Test" submenu in the menu bar with Fast.com and Speedtest.net options; opens in the default browser

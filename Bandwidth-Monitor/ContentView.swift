@@ -608,8 +608,15 @@ final class Preferences: ObservableObject {
     enum Theme: String, CaseIterable, Identifiable {
         case translucent
         case solid
+        case dark
         var id: String { rawValue }
-        var displayName: String { self == .translucent ? "Translucent" : "Solid" }
+        var displayName: String {
+            switch self {
+            case .translucent: return "Translucent"
+            case .solid:       return "Solid"
+            case .dark:        return "Dark"
+            }
+        }
     }
     
     @Published var launchAtLogin: Bool {
@@ -1284,33 +1291,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     let tipJarManager = TipJarManager()
     
-    private func applyTheme(to window: NSWindow) {
-        // Always use a layer-backed content view so SwiftUI materials render reliably
-        window.contentView?.wantsLayer = true
+    /// Returns the NSAppearance matching the current theme.
+    /// Solid → .aqua, Dark → .darkAqua, Translucent → nil (follow system)
+    static func resolvedNSAppearance() -> NSAppearance? {
+        switch Preferences.shared.theme {
+        case .solid:       return NSAppearance(named: .aqua)
+        case .dark:        return NSAppearance(named: .darkAqua)
+        case .translucent: return nil
+        }
+    }
 
+    private func applyTheme(to window: NSWindow) {
+        window.contentView?.wantsLayer = true
         switch Preferences.shared.theme {
         case .solid:
             window.isOpaque = true
             window.backgroundColor = NSColor.windowBackgroundColor
             window.titlebarAppearsTransparent = false
-            // Solid appearance for Aqua
             window.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            window.isOpaque = true
+            window.backgroundColor = NSColor(white: 0.12, alpha: 1)
+            window.titlebarAppearsTransparent = false
+            window.appearance = NSAppearance(named: .darkAqua)
         case .translucent:
-            // Keep the window drawable and layer-backed; avoid fully transparent window background
             window.isOpaque = false
             window.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.001)
             window.titlebarAppearsTransparent = true
-            // Vibrant appearance to match translucent content
-            window.appearance = NSAppearance(named: .vibrantLight)
+            window.appearance = nil
         }
     }
-    
+
     private func applyTheme(to popover: NSPopover) {
         switch Preferences.shared.theme {
-        case .solid:
-            popover.appearance = NSAppearance(named: .aqua)
-        case .translucent:
-            popover.appearance = NSAppearance(named: .vibrantLight)
+        case .solid:       popover.appearance = NSAppearance(named: .aqua)
+        case .dark:        popover.appearance = NSAppearance(named: .darkAqua)
+        case .translucent: popover.appearance = nil
         }
     }
     
@@ -1384,7 +1400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             NSApp.setActivationPolicy(.regular)
         }
 
-        NSApp.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+        NSApp.appearance = AppDelegate.resolvedNSAppearance()
 
         tipJarManager.startListeningForTransactions()
 
@@ -1452,6 +1468,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         openStatsItem.target = self
         menu.addItem(openStatsItem)
 
+        let speedTestItem = NSMenuItem(title: "Speed Test", action: nil, keyEquivalent: "")
+        let speedTestMenu = NSMenu()
+        let fastItem = NSMenuItem(title: "Fast.com", action: #selector(openFastCom), keyEquivalent: "")
+        fastItem.target = self
+        let speedtestItem = NSMenuItem(title: "Speedtest.net", action: #selector(openSpeedtestNet), keyEquivalent: "")
+        speedtestItem.target = self
+        speedTestMenu.addItem(fastItem)
+        speedTestMenu.addItem(speedtestItem)
+        speedTestItem.submenu = speedTestMenu
+        menu.addItem(speedTestItem)
+
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -1468,11 +1495,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         quitItem.target = self
         menu.addItem(quitItem)
 
-        menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+        menu.appearance = AppDelegate.resolvedNSAppearance()
 
         statusItem.menu = menu
 
-        statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+        statusItem.button?.appearance = AppDelegate.resolvedNSAppearance()
 
         monitor = BandwidthMonitor()
 
@@ -1533,7 +1560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 // Set the attributed string to statusItem.button
                 self.statusItem.button?.attributedTitle = fullString
                 // self.statusItem.button?.title = title // old line commented out
-                self.statusItem.button?.appearance = NSAppearance(named: isSolid ? .aqua : .vibrantLight)
+                self.statusItem.button?.appearance = AppDelegate.resolvedNSAppearance()
 
                 self.statusItem.button?.toolTip = "Download: \(rates.download)\nUpload: \(rates.upload)"
             }
@@ -1555,34 +1582,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                NSApp.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
-                
+                NSApp.appearance = AppDelegate.resolvedNSAppearance()
+                let resolved = AppDelegate.resolvedNSAppearance()
+
                 if let menu = self.statusItem.menu {
-                    menu.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
+                    menu.appearance = resolved
                     self.prepareMenuForDisplay(menu)
                 }
-                self.statusItem.button?.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
-                
+                self.statusItem.button?.appearance = resolved
+
                 if let w = self.aboutWindowController?.window {
                     self.applyTheme(to: w)
-                    if let vc = self.aboutWindowController?.contentViewController {
-                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
-                    }
+                    self.aboutWindowController?.contentViewController?.view.appearance = resolved
                 }
                 if let w = self.tipWindowController?.window {
                     self.applyTheme(to: w)
-                    if let vc = self.tipWindowController?.contentViewController {
-                        vc.view.appearance = NSAppearance(named: Preferences.shared.theme == .solid ? .aqua : .vibrantLight)
-                    }
+                    self.tipWindowController?.contentViewController?.view.appearance = resolved
                 }
                 if let w = self.settingsWindowController?.window {
-                    // Force settings window to remain solid and white regardless of theme
-                    w.isOpaque = true
-                    w.backgroundColor = .white
-                    w.titlebarAppearsTransparent = false
-                    if let vc = self.settingsWindowController?.contentViewController {
-                        vc.view.appearance = NSAppearance(named: .aqua)
-                    }
+                    self.applyTheme(to: w)
+                    self.settingsWindowController?.contentViewController?.view.appearance = resolved
                 }
                 if let p = self.detailsPopover {
                     self.applyTheme(to: p)
@@ -1743,6 +1762,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         self.onboardingWindowController = controller
         controller.showWindow(self)
         window.center()
+    }
+
+    @objc func openFastCom(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(string: "https://fast.com")!)
+    }
+
+    @objc func openSpeedtestNet(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(string: "https://www.speedtest.net")!)
     }
 
     @objc func quitApp(_ sender: Any?) {
