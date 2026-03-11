@@ -8,6 +8,7 @@ import StoreKit
 import ServiceManagement
 import Charts // Optional: for macOS 13+
 import CoreWLAN
+import SystemConfiguration
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -332,8 +333,19 @@ struct SettingsView: View {
     @State private var showRelaunchHint = false
 
     var body: some View {
-        // Build the main content once
-        let content = VStack(alignment: .leading, spacing: 16) {
+        if forceSolidBackground {
+            settingsContent
+                .background(Color(nsColor: .windowBackgroundColor))
+                .ignoresSafeArea(edges: .all)
+        } else {
+            settingsContent
+                .themedBackground()
+        }
+    }
+
+    @ViewBuilder
+    private var settingsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Settings").font(.title2).bold()
 
             Toggle(isOn: Binding(
@@ -364,7 +376,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Sampling").font(.headline)
                 Text("Choose a preset or fine-tune below.")
@@ -379,7 +391,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Monitoring").font(.headline)
                 HStack {
@@ -398,7 +410,7 @@ struct SettingsView: View {
                 }
             }
             .padding(.top, 8)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Appearance").font(.headline)
                 Picker("Theme", selection: $prefs.theme) {
@@ -409,13 +421,13 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Interfaces").font(.headline)
                 Text("Select interfaces to include. Leave empty to include all.").font(.footnote).foregroundStyle(.secondary)
                 InterfacePickerView(selected: $prefs.selectedInterfaces)
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Data Cap").font(.headline)
                 Toggle(isOn: $prefs.dataCapEnabled) {
@@ -467,27 +479,13 @@ struct SettingsView: View {
             }
         }
         .padding(18)
-
-        // Conditionally return either solid white or themed background
-        if forceSolidBackground {
-            content
-                .background(Color(nsColor: .windowBackgroundColor))
-                .ignoresSafeArea(edges: .all)
-        } else {
-            content
-                .themedBackground()
-        }
     }
     
     private func relaunchApp() {
-        let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = [Bundle.main.bundlePath]
-        do {
-            try task.run()
-        } catch {
-            // ignore
-        }
+        let url = Bundle.main.bundleURL
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in }
         NSApplication.shared.terminate(nil)
     }
 }
@@ -496,34 +494,32 @@ struct InterfacePickerView: View {
     @Binding var selected: Set<String>
     @State private var interfaces: [String] = []
     
-    // Cache the Wi‑Fi BSD interface name if available (e.g., "en0")
-    private static let wifiBSDName: String? = CWWiFiClient.shared().interface()?.interfaceName
+    // Maps BSD name (e.g. "en0") → system-provided localized display name (e.g. "Wi-Fi").
+    // Built once from SCNetworkInterfaceCopyAll(), which is authoritative and locale-aware.
+    private static let scDisplayNames: [String: String] = {
+        var map: [String: String] = [:]
+        let all = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] ?? []
+        for iface in all {
+            if let bsd = SCNetworkInterfaceGetBSDName(iface) as String?,
+               let label = SCNetworkInterfaceGetLocalizedDisplayName(iface) as String? {
+                map[bsd] = label
+            }
+        }
+        return map
+    }()
 
     static func friendlyName(for name: String) -> String {
-        if let wifi = wifiBSDName, wifi == name {
-            return "Wi‑Fi (\(name))"
+        // Use the authoritative SC display name when available
+        if let scName = scDisplayNames[name] {
+            return "\(scName) (\(name))"
         }
-        if name.hasPrefix("en") {
-            return "Ethernet (\(name))"
-        }
-        if name.hasPrefix("utun") {
-            return "VPN (\(name))"
-        }
-        if name.hasPrefix("awdl") {
-            return "AirDrop (\(name))"
-        }
-        if name.hasPrefix("llw") {
-            return "Low‑Latency Wireless (\(name))"
-        }
-        if name.hasPrefix("bridge") {
-            return "Bridge (\(name))"
-        }
-        if name.hasPrefix("ap") {
-            return "Personal Hotspot (\(name))"
-        }
-        if name.hasPrefix("p2p") {
-            return "Peer‑to‑Peer (\(name))"
-        }
+        // Fallback labels for virtual/tunnel interfaces SC doesn't enumerate
+        if name.hasPrefix("utun") { return "VPN (\(name))" }
+        if name.hasPrefix("awdl") { return "AirDrop (\(name))" }
+        if name.hasPrefix("llw")  { return "Low‑Latency Wireless (\(name))" }
+        if name.hasPrefix("bridge") { return "Bridge (\(name))" }
+        if name.hasPrefix("ap")   { return "Personal Hotspot (\(name))" }
+        if name.hasPrefix("p2p")  { return "Peer‑to‑Peer (\(name))" }
         return name
     }
     
@@ -569,10 +565,9 @@ struct InterfacePickerView: View {
                 if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
                     if let c = ptr!.pointee.ifa_name {
                         let name = String(cString: c)
-                        // Only include Wi‑Fi and LAN (Ethernet) interfaces
-                        let isWiFi = (wifiBSDName != nil && name == wifiBSDName)
-                        let isEthernet = name.hasPrefix("en")
-                        if isWiFi || isEthernet {
+                        // Show interfaces that SC knows about (Wi-Fi, Ethernet, Thunderbolt, etc.)
+                        // or fall back to any "en*" interface
+                        if scDisplayNames[name] != nil || name.hasPrefix("en") {
                             names.insert(name)
                         }
                     }
@@ -759,16 +754,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 button.layer?.cornerRadius = 6
                 button.layer?.masksToBounds = true
                 // Ensure readable tint on white
-                if #available(macOS 10.14, *) {
-                    button.contentTintColor = NSColor.labelColor
-                }
+                button.contentTintColor = NSColor.labelColor
             } else {
                 // Clear background for translucent theme
                 button.layer?.backgroundColor = NSColor.clear.cgColor
                 button.layer?.cornerRadius = 0
-                if #available(macOS 10.14, *) {
-                    button.contentTintColor = nil
-                }
+                button.contentTintColor = nil
             }
         }
 
@@ -839,8 +830,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
 
                 // Default attributes
-                let labelColor: NSColor = isSolid ? NSColor.labelColor : NSColor.labelColor
-                fullString.addAttribute(.foregroundColor, value: labelColor, range: fullRange)
+                fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
                 fullString.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular), range: fullRange)
 
                 // Find range of download part: "↓ \(rates.download)"
@@ -916,15 +906,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         button.layer?.backgroundColor = NSColor.white.cgColor
                         button.layer?.cornerRadius = 6
                         button.layer?.masksToBounds = true
-                        if #available(macOS 10.14, *) {
-                            button.contentTintColor = NSColor.labelColor
-                        }
+                        button.contentTintColor = NSColor.labelColor
                     } else {
                         button.layer?.backgroundColor = NSColor.clear.cgColor
                         button.layer?.cornerRadius = 0
-                        if #available(macOS 10.14, *) {
-                            button.contentTintColor = nil
-                        }
+                        button.contentTintColor = nil
                     }
                 }
             }
@@ -1092,7 +1078,7 @@ nonisolated extension PersistedData: Codable {}
     private var prevTx: UInt64 = 0
     private var lastInterfaceSet: Set<String> = []
     private var interfaceChangeSuppressCount: Int = 0 // number of upcoming samples to suppress
-    private var smoothWindow: Int = 5
+    private let smoothWindow: Int = 5
     private var recentDownRates: [Double] = [] // bytes/sec per sample
     private var recentUpRates: [Double] = []
     private var isFirstSample = true
@@ -1113,14 +1099,14 @@ nonisolated extension PersistedData: Codable {}
         (totalDownloadAllTime, totalUploadAllTime)
     }
         
-    // File URL to save/load history JSON data
-    private var historyURL: URL {
+    // File URL to save/load history JSON data — computed once and cached
+    private lazy var historyURL: URL = {
         let fm = FileManager.default
         let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let appDir = dir.appendingPathComponent("MenuBarBandwidthMonitor", isDirectory: true)
         try? fm.createDirectory(at: appDir, withIntermediateDirectories: true)
         return appDir.appendingPathComponent("history.json")
-    }
+    }()
     
     // Computed property to get total download/upload bytes in last 24 hours
     var totalsLast24Hours: (download: UInt64, upload: UInt64) {
@@ -1316,34 +1302,6 @@ nonisolated extension PersistedData: Codable {}
         return (rx, tx, names)
     }
     
-    static func format(bytes: UInt64) -> String {
-        let prefs = Preferences.shared
-        let unitFactor: Double = prefs.useSIUnits ? 1000.0 : 1024.0
-        if prefs.showBitsPerSecond {
-            let rate = Double(bytes) * 8.0 / prefs.samplingInterval
-            let units = ["bps","kbps","Mbps","Gbps","Tbps"]
-            var value = rate
-            var idx = 0
-            while value >= unitFactor && idx < units.count - 1 {
-                value /= unitFactor
-                idx += 1
-            }
-            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
-            return String(format: fmt, value, units[idx])
-        } else {
-            let rate = Double(bytes) / prefs.samplingInterval
-            let units = ["B/s","kB/s","MB/s","GB/s","TB/s"]
-            var value = rate
-            var idx = 0
-            while value >= unitFactor && idx < units.count - 1 {
-                value /= unitFactor
-                idx += 1
-            }
-            let fmt = idx <= 1 ? "%.0f %@" : "%.2f %@"
-            return String(format: fmt, value, units[idx])
-        }
-    }
-
     static func format(bytes: UInt64, over interval: TimeInterval) -> String {
         let prefs = Preferences.shared
         let unitFactor: Double = prefs.useSIUnits ? 1000.0 : 1024.0
@@ -1411,18 +1369,18 @@ nonisolated extension PersistedData: Codable {}
     
     // Load history array from JSON file on disk, filtering out old samples
     private func loadHistory() {
+        let cutoff = Date().addingTimeInterval(-35 * 86400)
         do {
             let data = try Data(contentsOf: historyURL)
-            if let object = try? JSONDecoder().decode(PersistedData.self, from: data) {
-                let dayAgo = Date().addingTimeInterval(-35 * 86400)
-                let filteredHistory = object.history.filter { $0.timestamp >= dayAgo }
-                self.history = filteredHistory
+            // Try the current format first; fall back to the legacy format (array only)
+            do {
+                let object = try JSONDecoder().decode(PersistedData.self, from: data)
+                self.history = object.history.filter { $0.timestamp >= cutoff }
                 self.totalDownloadAllTime = object.totalDownloadAllTime
                 self.totalUploadAllTime = object.totalUploadAllTime
-            } else if let old = try? JSONDecoder().decode([HistorySample].self, from: data) {
-                let dayAgo = Date().addingTimeInterval(-35 * 86400)
-                let filteredHistory = old.filter { $0.timestamp >= dayAgo }
-                self.history = filteredHistory
+            } catch {
+                let old = try JSONDecoder().decode([HistorySample].self, from: data)
+                self.history = old.filter { $0.timestamp >= cutoff }
                 self.totalDownloadAllTime = 0
                 self.totalUploadAllTime = 0
             }
@@ -1576,7 +1534,7 @@ struct BandwidthTotalsView: View {
             
             Spacer()
         }
-        .frame(width: 320, height: 320)
+        .frame(width: 320)
         .padding(18)
         .themedBackground()
     }
