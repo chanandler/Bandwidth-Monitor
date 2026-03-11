@@ -445,7 +445,7 @@ struct SettingsView: View {
                     Text("Billing day")
                     Spacer()
                     Picker("Billing day", selection: $prefs.billingDay) {
-                        ForEach(1...28, id: \.self) { day in
+                        ForEach(1...31, id: \.self) { day in
                             Text("\(day)").tag(day)
                         }
                     }
@@ -1407,19 +1407,40 @@ nonisolated extension PersistedData: Codable {}
     private func currentCycleStart(now: Date = Date()) -> Date {
         let calendar = Calendar.current
         let prefs = Preferences.shared
-        let billingDay = max(1, min(28, prefs.billingDay))
+        let billingDay = max(1, min(31, prefs.billingDay))
+
+        // Clamps billingDay to the last valid day of a given month
+        func clampedDate(year: Int, month: Int) -> Date? {
+            var comps = DateComponents()
+            comps.year = year
+            comps.month = month
+            // Find the last day of the target month then take the minimum
+            if let firstOfMonth = calendar.date(from: comps),
+               let range = calendar.range(of: .day, in: .month, for: firstOfMonth) {
+                comps.day = min(billingDay, range.upperBound - 1)
+                return calendar.date(from: comps)
+            }
+            return nil
+        }
+
         let components = calendar.dateComponents([.year, .month, .day], from: now)
-        if let day = components.day, day < billingDay {
+        guard let year = components.year, let month = components.month, let day = components.day else {
+            return calendar.startOfDay(for: now)
+        }
+
+        // Determine the billing day clamped to this month
+        let firstOfThisMonth = calendar.date(from: DateComponents(year: year, month: month))!
+        let daysInThisMonth = calendar.range(of: .day, in: .month, for: firstOfThisMonth)!.upperBound - 1
+        let effectiveBillingDayThisMonth = min(billingDay, daysInThisMonth)
+
+        if day < effectiveBillingDayThisMonth {
             // Cycle started last month
-            let prev = calendar.date(byAdding: .month, value: -1, to: now)!
-            var prevComp = calendar.dateComponents([.year, .month], from: prev)
-            prevComp.day = billingDay
-            return calendar.date(from: prevComp) ?? calendar.startOfDay(for: prev)
+            let prevMonth = month == 1 ? 12 : month - 1
+            let prevYear  = month == 1 ? year - 1 : year
+            return clampedDate(year: prevYear, month: prevMonth) ?? calendar.startOfDay(for: now)
         } else {
             // Cycle started this month
-            var thisComp = calendar.dateComponents([.year, .month], from: now)
-            thisComp.day = billingDay
-            return calendar.date(from: thisComp) ?? calendar.startOfDay(for: now)
+            return clampedDate(year: year, month: month) ?? calendar.startOfDay(for: now)
         }
     }
 

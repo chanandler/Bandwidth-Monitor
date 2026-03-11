@@ -36,8 +36,8 @@ Show download/upload split by interface (Wi-Fi vs Ethernet) rather than just the
 **8. Dark mode support**
 The translucent theme uses `.vibrantLight` hardcoded everywhere. Adding `.vibrantDark` / auto following system appearance would make it feel native.
 
-**9. Billing cycle day support up to 31**
-Currently capped at 28. Most ISP billing cycles start on the 1st but some use the 29th–31st. Using `Calendar` to clamp to the last valid day of any given month would handle this correctly.
+**9. ~~Billing cycle day support up to 31~~** ✅ Completed in v3.0
+~~Currently capped at 28. Most ISP billing cycles start on the 1st but some use the 29th–31st. Using `Calendar` to clamp to the last valid day of any given month would handle this correctly.~~
 
 ---
 
@@ -58,3 +58,4 @@ The app is English-only. Adding at least one or two major languages (e.g. French
 - v2.0 — Menu bar bandwidth monitor with upload/download display
 - v3.0 — Code quality improvements (lazy historyURL, removed dead code, @ViewBuilder refactor, relaunch fix, removed legacy availability guards)
 - v3.0 — Network interface auto-naming now uses `SCNetworkInterfaceCopyAll()` for accurate, locale-aware labels (e.g. correctly identifies Wi-Fi vs Ethernet vs Thunderbolt Bridge)
+- v3.0 — Billing day picker extended to 31; `currentCycleStart()` clamps to the last valid day of the month so days 29–31 work correctly in short months
