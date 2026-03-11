@@ -47,6 +47,393 @@ struct AboutBandwidthManagerView: View {
     }
 }
 
+// MARK: - Onboarding
+
+struct OnboardingView: View {
+    @ObservedObject private var prefs = Preferences.shared
+    @State private var page: Int = 0
+    var onFinish: (() -> Void)?
+
+    // Page 0: language, 1: welcome, 2: theme, 3: units, 4: dataCap, 5: notifications, 6: finish
+    private let totalPages = 7
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Page content
+            Group {
+                switch page {
+                case 0: languagePage
+                case 1: welcomePage
+                case 2: themePage
+                case 3: unitsPage
+                case 4: dataCapPage
+                case 5: notificationsPage
+                case 6: finishPage
+                default: languagePage
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            // Navigation bar
+            HStack {
+                // Step dots
+                HStack(spacing: 6) {
+                    ForEach(0..<totalPages, id: \.self) { i in
+                        Circle()
+                            .fill(i == page ? Color.accentColor : Color.secondary.opacity(0.35))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+
+                Spacer()
+
+                if page > 0 {
+                    Button(L.back) { page -= 1 }
+                        .buttonStyle(.bordered)
+                }
+
+                if page < totalPages - 1 {
+                    Button(L.next) { page += 1 }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button(L.getStarted) { onFinish?() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 480, height: 380)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // MARK: Pages
+
+    private var languagePage: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "globe")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 50, height: 50)
+                .foregroundStyle(.tint)
+
+            Text(L.chooseLanguage)
+                .font(.title2).bold()
+
+            Text(L.chooseLanguageDesc)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+
+            VStack(spacing: 10) {
+                ForEach(Preferences.Language.allCases) { lang in
+                    Button {
+                        prefs.language = lang
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(lang.flag)
+                                .font(.title2)
+                            Text(lang.displayName)
+                                .font(.body)
+                                .fontWeight(prefs.language == lang ? .semibold : .regular)
+                            Spacer()
+                            if prefs.language == lang {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(prefs.language == lang
+                                      ? Color.accentColor.opacity(0.12)
+                                      : Color(nsColor: .controlBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(prefs.language == lang ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 48)
+        }
+        .padding(32)
+    }
+
+    private var welcomePage: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                .resizable()
+                .frame(width: 60, height: 60)
+                .foregroundStyle(.tint)
+
+            Text(L.welcomeTitle)
+                .font(.title).bold()
+                .multilineTextAlignment(.center)
+
+            // "New version" badge
+            Text(L.majorUpdate)
+                .font(.caption).bold()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .background(Color.accentColor, in: Capsule())
+
+            Text(L.welcomeBody)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 28)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Label(L.welcomeBullet1, systemImage: "bell.badge.fill")
+                Label(L.welcomeBullet2, systemImage: "network")
+                Label(L.welcomeBullet3, systemImage: "checkmark.seal.fill")
+                Label(L.welcomeBullet4, systemImage: "calendar")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            Text(L.welcomeFooter)
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(28)
+    }
+
+    private var themePage: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "paintbrush.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .foregroundStyle(.tint)
+
+            Text(L.chooseStyle)
+                .font(.title2).bold()
+
+            Text(L.chooseStyleDesc)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            HStack(spacing: 16) {
+                ForEach(Preferences.Theme.allCases) { theme in
+                    Button {
+                        prefs.theme = theme
+                    } label: {
+                        VStack(spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(theme == .translucent ? Color.clear : Color(nsColor: .windowBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(prefs.theme == theme ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: prefs.theme == theme ? 2 : 1)
+                                    )
+                                    .frame(width: 120, height: 64)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+
+                                Text("↓ 12 Mbps ↑ 2 Mbps")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(theme == .solid ? .primary : .primary)
+                            }
+                            Text(theme == .translucent ? L.themeTranslucent : L.themeSolid)
+                                .font(.subheadline)
+                                .fontWeight(prefs.theme == theme ? .semibold : .regular)
+                                .foregroundStyle(prefs.theme == theme ? .primary : .secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(32)
+    }
+
+    private var unitsPage: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "ruler.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .foregroundStyle(.tint)
+
+            Text(L.unitsTitle)
+                .font(.title2).bold()
+
+            Text(L.unitsDesc)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $prefs.showBitsPerSecond) {
+                        Text(L.showBitsPerSecondToggle)
+                            .font(.body)
+                    }
+                    Text(prefs.showBitsPerSecond ? L.showBitsDesc_on : L.showBitsDesc_off)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $prefs.useSIUnits) {
+                        Text(L.useSIUnitsToggle)
+                            .font(.body)
+                    }
+                    Text(prefs.useSIUnits ? L.siUnitsDesc_on : L.siUnitsDesc_off)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(16)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 24)
+        }
+        .padding(32)
+    }
+
+    private var dataCapPage: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "gauge.with.needle.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .foregroundStyle(.tint)
+
+            Text(L.monthlyDataCap)
+                .font(.title2).bold()
+
+            Text(L.dataCapDesc)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $prefs.dataCapEnabled) {
+                    Text(L.enableDataCapTracking)
+                        .font(.body)
+                }
+
+                if prefs.dataCapEnabled {
+                    HStack {
+                        Text(L.monthlyCap)
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { Int(prefs.dataCapGB) },
+                            set: { prefs.dataCapGB = Double($0) }
+                        )) {
+                            ForEach([10, 25, 50, 100, 150, 200, 250, 300, 500, 750, 1000], id: \.self) { gb in
+                                Text("\(gb) GB").tag(gb)
+                            }
+                        }
+                        .frame(width: 110)
+                    }
+
+                    HStack {
+                        Text(L.billingStartsOnDay)
+                        Spacer()
+                        Picker("", selection: $prefs.billingDay) {
+                            ForEach(1...31, id: \.self) { day in
+                                Text("\(day)").tag(day)
+                            }
+                        }
+                        .frame(width: 80)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .animation(.easeInOut(duration: 0.2), value: prefs.dataCapEnabled)
+            .padding(.horizontal, 24)
+        }
+        .padding(32)
+    }
+
+    private var notificationsPage: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "bell.badge.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .foregroundStyle(.tint)
+
+            Text(L.notificationsTitle)
+                .font(.title2).bold()
+
+            Text(L.notificationsDesc)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+
+            VStack(spacing: 10) {
+                Button(L.allowNotifications) {
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                        if granted {
+                            DispatchQueue.main.async { page += 1 }
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+
+                Text(L.notificationsSystemHint)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+            }
+        }
+        .padding(32)
+    }
+
+    private var finishPage: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.circle.fill")
+                .resizable()
+                .frame(width: 64, height: 64)
+                .foregroundStyle(.green)
+
+            Text(L.allSet)
+                .font(.title).bold()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label(L.finishBullet1, systemImage: "arrow.up.arrow.down")
+                Label(L.finishBullet2, systemImage: "chart.bar.fill")
+                Label(L.finishBullet3, systemImage: "gearshape.fill")
+                if prefs.dataCapEnabled {
+                    Label(L.finishBullet4, systemImage: "bell.fill")
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 32)
+
+            Text(L.tipJarHint)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .padding(.top, 4)
+        }
+        .padding(32)
+    }
+}
+
 // Helper ViewModifier to apply background based on theme
 struct ThemedBackground: ViewModifier {
     @ObservedObject private var prefs = Preferences.shared
@@ -267,6 +654,31 @@ final class Preferences: ObservableObject {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "themePreference") }
     }
 
+    enum Language: String, CaseIterable, Identifiable {
+        case english = "en"
+        case french  = "fr"
+        case german  = "de"
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .english: return "English"
+            case .french:  return "Français"
+            case .german:  return "Deutsch"
+            }
+        }
+        var flag: String {
+            switch self {
+            case .english: return "🇬🇧"
+            case .french:  return "🇫🇷"
+            case .german:  return "🇩🇪"
+            }
+        }
+    }
+
+    @Published var language: Language {
+        didSet { UserDefaults.standard.set(language.rawValue, forKey: "appLanguage") }
+    }
+
     private init() {
         // Initialize from system/user defaults
         self.launchAtLogin = Self.currentLaunchAtLogin()
@@ -288,6 +700,14 @@ final class Preferences: ObservableObject {
             self.theme = t
         } else {
             self.theme = .translucent
+        }
+
+        if let raw = UserDefaults.standard.string(forKey: "appLanguage"), let lang = Language(rawValue: raw) {
+            self.language = lang
+        } else {
+            // Default to system language if supported, otherwise English
+            let sysLang = Locale.current.language.languageCode?.identifier ?? "en"
+            self.language = Language(rawValue: sysLang) ?? .english
         }
     }
 
@@ -321,6 +741,212 @@ final class Preferences: ObservableObject {
     }
 }
 
+// MARK: - Localisation
+struct L {
+    static var lang: Preferences.Language { Preferences.shared.language }
+
+    // MARK: General / Navigation
+    static var settings: String          { tr("Settings",         "Paramètres",        "Einstellungen") }
+    static var close: String             { tr("Close",            "Fermer",             "Schließen") }
+    static var back: String              { tr("Back",             "Retour",             "Zurück") }
+    static var next: String              { tr("Next",             "Suivant",            "Weiter") }
+    static var getStarted: String        { tr("Get Started",      "Commencer",          "Los geht's") }
+
+    // MARK: Settings – General
+    static var launchAtLogin: String     { tr("Launch at login",  "Démarrer à l'ouverture de session", "Beim Anmelden starten") }
+    static var launchAtLoginDesc: String { tr("Automatically start Bandwidth Monitor when you sign in.",
+                                              "Lancer automatiquement Bandwidth Monitor à l'ouverture de session.",
+                                              "Bandwidth Monitor beim Anmelden automatisch starten.") }
+    static var runAsHiddenService: String     { tr("Run as hidden service",   "Exécuter en tant que service caché",   "Als versteckten Dienst ausführen") }
+    static var runAsHiddenServiceDesc: String { tr("Hide the Dock icon and run in the background. Requires relaunch.",
+                                                   "Masquer l'icône du Dock et s'exécuter en arrière-plan. Nécessite un redémarrage.",
+                                                   "Dock-Symbol ausblenden und im Hintergrund laufen. Neustart erforderlich.") }
+
+    // MARK: Settings – Monitoring
+    static var monitoring: String        { tr("Monitoring",       "Surveillance",       "Überwachung") }
+    static var samplingInterval: String  { tr("Sampling interval","Intervalle d'échantillonnage", "Abtastintervall") }
+    static var showBitsPerSecond: String { tr("Show bits per second (instead of bytes)", "Afficher les bits par seconde (au lieu des octets)", "Bits pro Sekunde anzeigen (statt Bytes)") }
+    static var useSIUnits: String        { tr("Use SI units (1000) instead of IEC (1024)", "Utiliser les unités SI (1000) au lieu de IEC (1024)", "SI-Einheiten (1000) statt IEC (1024) verwenden") }
+
+    // MARK: Settings – Appearance
+    static var appearance: String        { tr("Appearance",       "Apparence",          "Erscheinungsbild") }
+    static var theme: String             { tr("Theme",            "Thème",              "Design") }
+    static var themeTranslucent: String  { tr("Translucent",      "Translucide",        "Durchsichtig") }
+    static var themeSolid: String        { tr("Solid",            "Solide",             "Massiv") }
+
+    // MARK: Settings – Interfaces
+    static var interfaces: String        { tr("Interfaces",       "Interfaces",         "Schnittstellen") }
+    static var interfacesDesc: String    { tr("Select interfaces to include. Leave empty to include all.",
+                                              "Sélectionnez les interfaces à inclure. Laissez vide pour toutes les inclure.",
+                                              "Schnittstellen auswählen. Leer lassen, um alle einzuschließen.") }
+    static var noInterfacesDetected: String { tr("No interfaces detected right now.",
+                                                 "Aucune interface détectée pour l'instant.",
+                                                 "Derzeit keine Schnittstellen erkannt.") }
+    static var refreshInterfaces: String { tr("Refresh Interfaces", "Actualiser les interfaces", "Schnittstellen aktualisieren") }
+
+    // MARK: Settings – Data Cap
+    static var dataCap: String               { tr("Data Cap",                   "Limite de données",        "Datenlimit") }
+    static var enableDataCap: String         { tr("Enable monthly data cap tracking", "Activer le suivi de la limite mensuelle", "Monatliches Datenlimit aktivieren") }
+    static var capSize: String               { tr("Cap size",                   "Taille limite",            "Limitgröße") }
+    static var billingDay: String            { tr("Billing day",                "Jour de facturation",      "Abrechnungstag") }
+    static var testNotification: String      { tr("Test Notification",          "Tester la notification",   "Benachrichtigung testen") }
+    static var relaunchNow: String           { tr("Relaunch Now",               "Relancer maintenant",      "Jetzt neu starten") }
+    static var relaunchHint: String          { tr("Please quit and reopen the app to apply this change.",
+                                                   "Veuillez quitter et rouvrir l'application pour appliquer ce changement.",
+                                                   "Bitte App beenden und neu öffnen, um die Änderung anzuwenden.") }
+
+    // MARK: Settings – Language
+    static var language: String          { tr("Language",         "Langue",             "Sprache") }
+
+    // MARK: Onboarding – Language picker
+    static var chooseLanguage: String    { tr("Choose Your Language",  "Choisissez votre langue",  "Sprache wählen") }
+    static var chooseLanguageDesc: String { tr("Select the language you'd like to use throughout the app.",
+                                               "Sélectionnez la langue que vous souhaitez utiliser dans l'application.",
+                                               "Wählen Sie die Sprache, die Sie in der App verwenden möchten.") }
+
+    // MARK: Onboarding – Welcome
+    static var welcomeTitle: String      { tr("Bandwidth Monitor 3.0",  "Bandwidth Monitor 3.0",  "Bandwidth Monitor 3.0") }
+    static var majorUpdate: String       { tr("MAJOR UPDATE",           "MISE À JOUR MAJEURE",    "GROSSES UPDATE") }
+    static var welcomeBody: String       { tr("A lot has changed since v2. We've added data cap notifications, a smarter interface picker, improved settings, a full onboarding experience, and plenty of fixes under the hood — all while staying lightweight and private.",
+                                              "Beaucoup de choses ont changé depuis la v2. Nous avons ajouté des notifications de limite de données, un sélecteur d'interface plus intelligent, des paramètres améliorés, une expérience d'accueil complète et de nombreuses corrections — tout en restant léger et privé.",
+                                              "Seit v2 hat sich viel geändert. Wir haben Datenlimit-Benachrichtigungen, eine intelligentere Schnittstellenauswahl, verbesserte Einstellungen, ein vollständiges Onboarding und viele Korrekturen hinzugefügt — alles bei minimalem Ressourcenverbrauch.") }
+    static var welcomeBullet1: String    { tr("Data cap alerts at 75%, 90% and 100%",
+                                              "Alertes de limite de données à 75 %, 90 % et 100 %",
+                                              "Datenlimit-Warnungen bei 75 %, 90 % und 100 %") }
+    static var welcomeBullet2: String    { tr("Accurate interface names via system APIs",
+                                              "Noms d'interface précis via les API système",
+                                              "Genaue Schnittstellennamen über System-APIs") }
+    static var welcomeBullet3: String    { tr("Notifications that work even while the app is open",
+                                              "Notifications qui fonctionnent même lorsque l'application est ouverte",
+                                              "Benachrichtigungen funktionieren auch bei geöffneter App") }
+    static var welcomeBullet4: String    { tr("Billing cycle support up to day 31",
+                                              "Prise en charge du cycle de facturation jusqu'au jour 31",
+                                              "Abrechnungszyklus bis Tag 31 unterstützt") }
+    static var welcomeFooter: String     { tr("No accounts. No tracking. Everything stays on your Mac.",
+                                              "Pas de comptes. Pas de suivi. Tout reste sur votre Mac.",
+                                              "Keine Konten. Kein Tracking. Alles bleibt auf Ihrem Mac.") }
+
+    // MARK: Onboarding – Theme
+    static var chooseStyle: String       { tr("Choose a Style",     "Choisissez un style",     "Stil auswählen") }
+    static var chooseStyleDesc: String   { tr("Pick how the menu bar display looks. You can change this at any time in Settings.",
+                                              "Choisissez l'apparence de l'affichage dans la barre des menus. Vous pouvez le modifier à tout moment dans les Paramètres.",
+                                              "Wählen Sie das Aussehen der Menüleiste. Sie können dies jederzeit in den Einstellungen ändern.") }
+
+    // MARK: Onboarding – Units
+    static var unitsTitle: String        { tr("Units & Display",   "Unités et affichage",    "Einheiten & Anzeige") }
+    static var unitsDesc: String         { tr("Choose how speeds are shown in your menu bar.",
+                                              "Choisissez comment les vitesses sont affichées dans votre barre des menus.",
+                                              "Wählen Sie, wie Geschwindigkeiten in Ihrer Menüleiste angezeigt werden.") }
+    static var showBitsDesc_on: String   { tr("Speeds shown as Mbps / Gbps — matches what ISPs advertise.",
+                                              "Vitesses affichées en Mbit/s / Gbit/s — correspond à ce que les FAI annoncent.",
+                                              "Geschwindigkeiten in Mbit/s / Gbit/s — entspricht ISP-Angaben.") }
+    static var showBitsDesc_off: String  { tr("Speeds shown as MB/s / GB/s — matches file transfer speeds.",
+                                              "Vitesses affichées en Mo/s / Go/s — correspond aux vitesses de transfert de fichiers.",
+                                              "Geschwindigkeiten in MB/s / GB/s — entspricht Dateiübertragungsgeschwindigkeiten.") }
+    static var siUnitsDesc_on: String    { tr("1 MB = 1,000,000 bytes — consistent with how ISPs and storage manufacturers measure.",
+                                              "1 Mo = 1 000 000 octets — cohérent avec la mesure des FAI et fabricants de stockage.",
+                                              "1 MB = 1.000.000 Byte — wie ISPs und Speicherhersteller messen.") }
+    static var siUnitsDesc_off: String   { tr("1 MiB = 1,048,576 bytes — traditional binary units used by operating systems.",
+                                              "1 Mio = 1 048 576 octets — unités binaires traditionnelles utilisées par les systèmes d'exploitation.",
+                                              "1 MiB = 1.048.576 Byte — traditionelle Binäreinheiten der Betriebssysteme.") }
+    static var showBitsPerSecondToggle: String { tr("Show bits per second",
+                                                    "Afficher les bits par seconde",
+                                                    "Bits pro Sekunde anzeigen") }
+    static var useSIUnitsToggle: String  { tr("Use SI units (1000-based)",
+                                              "Utiliser les unités SI (base 1000)",
+                                              "SI-Einheiten verwenden (Basis 1000)") }
+
+    // MARK: Onboarding – Data Cap
+    static var monthlyDataCap: String    { tr("Monthly Data Cap",  "Limite de données mensuelle", "Monatliches Datenlimit") }
+    static var dataCapDesc: String       { tr("If your ISP gives you a monthly allowance, Bandwidth Monitor can track your usage and warn you before you go over.",
+                                              "Si votre FAI vous accorde un forfait mensuel, Bandwidth Monitor peut suivre votre utilisation et vous avertir avant de le dépasser.",
+                                              "Wenn Ihr ISP ein monatliches Kontingent hat, kann Bandwidth Monitor Ihre Nutzung verfolgen und Sie warnen.") }
+    static var enableDataCapTracking: String { tr("Enable data cap tracking",
+                                                  "Activer le suivi de la limite de données",
+                                                  "Datenlimit-Verfolgung aktivieren") }
+    static var monthlyCap: String        { tr("Monthly cap",       "Forfait mensuel",    "Monatliches Limit") }
+    static var billingStartsOnDay: String { tr("Billing starts on day", "Facturation à partir du jour", "Abrechnung ab Tag") }
+
+    // MARK: Onboarding – Notifications
+    static var notificationsTitle: String   { tr("Notifications",   "Notifications",     "Benachrichtigungen") }
+    static var notificationsDesc: String    { tr("Bandwidth Monitor can alert you at 75%, 90%, and 100% of your monthly data cap. To enable alerts, grant notification permission when prompted.",
+                                                 "Bandwidth Monitor peut vous alerter à 75 %, 90 % et 100 % de votre limite mensuelle. Pour activer les alertes, accordez la permission de notifications lorsque vous y êtes invité.",
+                                                 "Bandwidth Monitor kann Sie bei 75 %, 90 % und 100 % Ihres Datenlimits warnen. Erlauben Sie Benachrichtigungen, wenn Sie dazu aufgefordert werden.") }
+    static var allowNotifications: String   { tr("Allow Notifications",  "Autoriser les notifications",  "Benachrichtigungen erlauben") }
+    static var notificationsSystemHint: String { tr("You can also enable notifications later via System Settings → Notifications → Bandwidth Monitor.",
+                                                    "Vous pouvez également activer les notifications ultérieurement via Réglages Système → Notifications → Bandwidth Monitor.",
+                                                    "Sie können Benachrichtigungen auch später über Systemeinstellungen → Mitteilungen → Bandwidth Monitor aktivieren.") }
+
+    // MARK: Onboarding – Finish
+    static var allSet: String            { tr("You're All Set!",   "C'est tout !",       "Alles bereit!") }
+    static var finishBullet1: String     { tr("Speeds shown in your menu bar, always up to date",
+                                              "Vitesses affichées dans votre barre des menus, toujours à jour",
+                                              "Geschwindigkeiten in Ihrer Menüleiste, stets aktuell") }
+    static var finishBullet2: String     { tr("Open Statistics from the menu to see usage history",
+                                              "Ouvrez les Statistiques depuis le menu pour voir l'historique d'utilisation",
+                                              "Öffnen Sie die Statistiken aus dem Menü, um den Verlauf zu sehen") }
+    static var finishBullet3: String     { tr("Visit Settings anytime to adjust preferences",
+                                              "Visitez les Paramètres à tout moment pour ajuster vos préférences",
+                                              "Besuchen Sie jederzeit die Einstellungen, um Voreinstellungen anzupassen") }
+    static var finishBullet4: String     { tr("You'll be notified at 75%, 90% and 100% of your cap",
+                                              "Vous serez averti à 75 %, 90 % et 100 % de votre limite",
+                                              "Sie werden bei 75 %, 90 % und 100 % Ihres Limits benachrichtigt") }
+    static var tipJarHint: String        { tr("If you enjoy the app, a small tip via the Tip Jar helps keep it going.",
+                                              "Si vous aimez l'application, un petit pourboire via la Tip Jar aide à la maintenir.",
+                                              "Wenn Ihnen die App gefällt, hilft ein kleines Trinkgeld über das Tip Jar, sie am Laufen zu halten.") }
+
+    // MARK: Statistics (BandwidthTotalsView)
+    static var totalData: String         { tr("Total Data Since Last Reset",
+                                              "Données totales depuis la dernière réinitialisation",
+                                              "Gesamtdaten seit letztem Zurücksetzen") }
+    static var download: String          { tr("Download",           "Téléchargement",    "Download") }
+    static var upload: String            { tr("Upload",             "Téléversement",     "Upload") }
+    static var peakRates: String         { tr("Peak Rates (since launch/reset)",
+                                              "Vitesses de pointe (depuis le démarrage/réinitialisation)",
+                                              "Spitzenraten (seit Start/Zurücksetzen)") }
+    static var down: String              { tr("Down:",              "Bas :",              "Down:") }
+    static var up: String                { tr("Up:",                "Haut :",             "Up:") }
+    static var currentCycleUsage: String { tr("Current Cycle Usage", "Utilisation du cycle actuel", "Aktuelle Zyklusnutzung") }
+    static var usedRemaining: String     { tr("Used",               "Utilisé",            "Genutzt") }
+    static var remaining: String         { tr("Remaining",          "Restant",            "Verbleibend") }
+    static var resetTotals: String       { tr("Reset Totals",       "Réinitialiser les totaux", "Statistiken zurücksetzen") }
+    static var resetAlertTitle: String   { tr("Reset All Bandwidth Totals?",
+                                              "Réinitialiser toutes les totaux de bande passante ?",
+                                              "Alle Bandbreiten-Statistiken zurücksetzen?") }
+    static var resetAlertMessage: String { tr("This will clear all statistics for the all-time totals. This cannot be undone.",
+                                              "Cela effacera toutes les statistiques pour les totaux de tous les temps. Cette action est irréversible.",
+                                              "Dadurch werden alle Statistiken der Gesamttotale gelöscht. Dies kann nicht rückgängig gemacht werden.") }
+    static var resetConfirm: String      { tr("Reset",              "Réinitialiser",      "Zurücksetzen") }
+    static var cancel: String            { tr("Cancel",             "Annuler",            "Abbrechen") }
+
+    // MARK: Notification content
+    static func capTitle(pct: Int) -> String {
+        switch pct {
+        case 100: return tr("Data Cap Reached",    "Limite de données atteinte",    "Datenlimit erreicht")
+        default:  return tr("Data Cap: \(pct)% Used", "Limite de données : \(pct) % utilisés", "Datenlimit: \(pct) % genutzt")
+        }
+    }
+    static func capBody(pct: Int, gb: Int) -> String {
+        switch pct {
+        case 100: return tr("You've reached your \(gb) GB monthly data cap.",
+                            "Vous avez atteint votre limite mensuelle de \(gb) Go.",
+                            "Sie haben Ihr monatliches Datenlimit von \(gb) GB erreicht.")
+        default:  return tr("You've used \(pct)% of your \(gb) GB monthly allowance.",
+                            "Vous avez utilisé \(pct) % de votre forfait mensuel de \(gb) Go.",
+                            "Sie haben \(pct) % Ihres monatlichen Kontingents von \(gb) GB genutzt.")
+        }
+    }
+
+    // MARK: Private helper
+    private static func tr(_ en: String, _ fr: String, _ de: String) -> String {
+        switch lang {
+        case .english: return en
+        case .french:  return fr
+        case .german:  return de
+        }
+    }
+}
+
 struct SettingsView: View {
     let forceSolidBackground: Bool
 
@@ -349,7 +975,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Settings").font(.title2).bold()
+            Text(L.settings).font(.title2).bold()
 
             Toggle(isOn: Binding(
                 get: { prefs.launchAtLogin },
@@ -358,8 +984,8 @@ struct SettingsView: View {
                 }
             )) {
                 VStack(alignment: .leading) {
-                    Text("Launch at login")
-                    Text("Automatically start Bandwidth Monitor when you sign in.")
+                    Text(L.launchAtLogin)
+                    Text(L.launchAtLoginDesc)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -373,17 +999,17 @@ struct SettingsView: View {
                 }
             )) {
                 VStack(alignment: .leading) {
-                    Text("Run as hidden service")
-                    Text("Hide the Dock icon and run in the background. Requires relaunch.")
+                    Text(L.runAsHiddenService)
+                    Text(L.runAsHiddenServiceDesc)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Monitoring").font(.headline)
+                Text(L.monitoring).font(.headline)
                 HStack(spacing: 8) {
-                    Text("Sampling interval")
+                    Text(L.samplingInterval)
                     Spacer()
                     // Dropdown picker for common intervals 0.25s–30s
                     Picker("", selection: $prefs.samplingInterval) {
@@ -412,18 +1038,18 @@ struct SettingsView: View {
                     Text("s").foregroundStyle(.secondary)
                 }
                 Toggle(isOn: $prefs.showBitsPerSecond) {
-                    Text("Show bits per second (instead of bytes)")
+                    Text(L.showBitsPerSecond)
                 }
                 Toggle(isOn: $prefs.useSIUnits) {
-                    Text("Use SI units (1000) instead of IEC (1024)")
+                    Text(L.useSIUnits)
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Appearance").font(.headline)
-                Picker("Theme", selection: $prefs.theme) {
+                Text(L.appearance).font(.headline)
+                Picker(L.theme, selection: $prefs.theme) {
                     ForEach(Preferences.Theme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
+                        Text(theme == .translucent ? L.themeTranslucent : L.themeSolid).tag(theme)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -431,18 +1057,18 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Interfaces").font(.headline)
-                Text("Select interfaces to include. Leave empty to include all.").font(.footnote).foregroundStyle(.secondary)
+                Text(L.interfaces).font(.headline)
+                Text(L.interfacesDesc).font(.footnote).foregroundStyle(.secondary)
                 InterfacePickerView(selected: $prefs.selectedInterfaces)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Data Cap").font(.headline)
+                Text(L.dataCap).font(.headline)
                 Toggle(isOn: $prefs.dataCapEnabled) {
-                    Text("Enable monthly data cap tracking")
+                    Text(L.enableDataCap)
                 }
                 HStack(spacing: 8) {
-                    Text("Cap size")
+                    Text(L.capSize)
                     Spacer()
                     // Dropdown picker 1 GB – 1000 GB (1 TB)
                     Picker("", selection: Binding(
@@ -471,16 +1097,16 @@ struct SettingsView: View {
                     Text("GB").foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("Billing day")
+                    Text(L.billingDay)
                     Spacer()
-                    Picker("Billing day", selection: $prefs.billingDay) {
+                    Picker(L.billingDay, selection: $prefs.billingDay) {
                         ForEach(1...31, id: \.self) { day in
                             Text("\(day)").tag(day)
                         }
                     }
                     .frame(width: 120)
                 }
-                Button("Test Notification") {
+                Button(L.testNotification) {
                     let content = UNMutableNotificationContent()
                     content.title = "Notifications Working"
                     content.body = "Bandwidth Monitor notifications are set up correctly."
@@ -492,10 +1118,21 @@ struct SettingsView: View {
                 .padding(.top, 4)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L.language).font(.headline)
+                Picker("", selection: $prefs.language) {
+                    ForEach(Preferences.Language.allCases) { lang in
+                        Text("\(lang.flag) \(lang.displayName)").tag(lang)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+
             if showRelaunchHint {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                    Text("Please quit and reopen the app to apply this change.")
+                    Text(L.relaunchHint)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -503,7 +1140,7 @@ struct SettingsView: View {
             }
             HStack {
                 if showRelaunchHint {
-                    Button("Relaunch Now") {
+                    Button(L.relaunchNow) {
                         relaunchApp()
                     }
                     .buttonStyle(.borderedProminent)
@@ -513,7 +1150,7 @@ struct SettingsView: View {
             Spacer()
             HStack {
                 Spacer()
-                Button("Close") { onClose?() }
+                Button(L.close) { onClose?() }
                     .keyboardShortcut(.cancelAction)
             }
         }
@@ -565,7 +1202,7 @@ struct InterfacePickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if interfaces.isEmpty {
-                Text("No interfaces detected right now.")
+                Text(L.noInterfacesDetected)
                     .foregroundStyle(.secondary)
                     .font(.footnote)
             } else {
@@ -583,7 +1220,7 @@ struct InterfacePickerView: View {
                     }
                 }
             }
-            Button("Refresh Interfaces") {
+            Button(L.refreshInterfaces) {
                 interfaces = InterfacePickerView.fetchInterfaces()
             }
             .buttonStyle(.bordered)
@@ -638,7 +1275,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var aboutWindowController: NSWindowController?
     var tipWindowController: NSWindowController?
     var settingsWindowController: NSWindowController?
-    
+    var onboardingWindowController: NSWindowController?
+
     var solidHeaderMenuItem: NSMenuItem?
     var solidFooterMenuItem: NSMenuItem?
     
@@ -906,6 +1544,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
+        // Show onboarding on first launch
+        if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.showOnboarding()
+            }
+        }
+
         themeCancellable = Preferences.shared.$theme
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -1078,6 +1723,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             detailsPopover = popover
         }
+    }
+
+    func showOnboarding() {
+        let contentView = OnboardingView { [weak self] in
+            UserDefaults.standard.set(1, forKey: "completedOnboardingVersion")
+            self?.onboardingWindowController?.close()
+            self?.onboardingWindowController = nil
+        }
+        let hosting = NSHostingController(rootView: contentView)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Welcome to Bandwidth Monitor"
+        window.setContentSize(NSSize(width: 480, height: 380))
+        window.styleMask = [NSWindow.StyleMask.titled, NSWindow.StyleMask.closable]
+        window.isReleasedWhenClosed = false
+        window.isOpaque = true
+        window.backgroundColor = NSColor.windowBackgroundColor
+        let controller = NSWindowController(window: window)
+        self.onboardingWindowController = controller
+        controller.showWindow(self)
+        window.center()
     }
 
     @objc func quitApp(_ sender: Any?) {
@@ -1535,16 +2200,17 @@ nonisolated extension PersistedData: Codable {}
         let usedBytes = cycle.download &+ cycle.upload
         let percent = Int(Double(usedBytes) / Double(capBytes) * 100)
 
-        let thresholds: [(Int, String, String)] = [
-            (75, "Data Cap: 75% Used",  "You've used 75% of your \(Int(prefs.dataCapGB)) GB monthly allowance."),
-            (90, "Data Cap: 90% Used",  "You've used 90% of your \(Int(prefs.dataCapGB)) GB monthly allowance."),
-            (100, "Data Cap Reached",   "You've reached your \(Int(prefs.dataCapGB)) GB monthly data cap.")
-        ]
+        let thresholds: [Int] = [75, 90, 100]
+        let gb = Int(prefs.dataCapGB)
 
-        for (threshold, title, body) in thresholds {
+        for threshold in thresholds {
             guard percent >= threshold, !firedCapThresholds.contains(threshold) else { continue }
             firedCapThresholds.insert(threshold)
-            sendNotification(identifier: "datacap.\(threshold)", title: title, body: body)
+            sendNotification(
+                identifier: "datacap.\(threshold)",
+                title: L.capTitle(pct: threshold),
+                body: L.capBody(pct: threshold, gb: gb)
+            )
         }
     }
 
@@ -1564,7 +2230,7 @@ struct BandwidthTotalsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Total Data Since Last Reset")
+            Text(L.totalData)
                 .font(.title2).bold()
             
             if #available(macOS 13.0, *) {
@@ -1586,7 +2252,7 @@ struct BandwidthTotalsView: View {
             
             HStack {
                 VStack(alignment: .leading) {
-                    Text("Download")
+                    Text(L.download)
                         .font(.headline)
                     Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.download))
                         .font(.system(size: 24, weight: .semibold, design: .monospaced))
@@ -1594,7 +2260,7 @@ struct BandwidthTotalsView: View {
                 }
                 Spacer()
                 VStack(alignment: .leading) {
-                    Text("Upload")
+                    Text(L.upload)
                         .font(.headline)
                     Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.upload))
                         .font(.system(size: 24, weight: .semibold, design: .monospaced))
@@ -1603,14 +2269,14 @@ struct BandwidthTotalsView: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Peak Rates (since launch/reset)").font(.headline)
+                Text(L.peakRates).font(.headline)
                 HStack {
-                    Text("Down:")
+                    Text(L.down)
                     Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakDownPerSecondBytes), over: 1.0))
                         .font(.system(size: 16, weight: .semibold, design: .monospaced))
                         .foregroundColor(.green)
                     Spacer()
-                    Text("Up:")
+                    Text(L.up)
                     Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakUpPerSecondBytes), over: 1.0))
                         .font(.system(size: 16, weight: .semibold, design: .monospaced))
                         .foregroundColor(.red)
@@ -1623,8 +2289,8 @@ struct BandwidthTotalsView: View {
                 let usedBytes = cycle.download &+ cycle.upload
                 let remaining = capBytes > usedBytes ? capBytes &- usedBytes : 0
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Current Cycle Usage").font(.headline)
-                    Text("Used: \(BandwidthMonitor.formatTotal(bytes: usedBytes))  •  Remaining: \(BandwidthMonitor.formatTotal(bytes: remaining))")
+                    Text(L.currentCycleUsage).font(.headline)
+                    Text("\(L.usedRemaining): \(BandwidthMonitor.formatTotal(bytes: usedBytes))  •  \(L.remaining): \(BandwidthMonitor.formatTotal(bytes: remaining))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1634,18 +2300,18 @@ struct BandwidthTotalsView: View {
             Button(role: .destructive) {
                 showResetAlert = true
             } label: {
-                Text("Reset Totals")
+                Text(L.resetTotals)
                     .frame(maxWidth: .infinity)
             }
             .padding(.top, 16)
             .buttonStyle(.borderedProminent)
-            .alert("Reset All Bandwidth Totals?", isPresented: $showResetAlert) {
-                Button("Reset", role: .destructive) {
+            .alert(L.resetAlertTitle, isPresented: $showResetAlert) {
+                Button(L.resetConfirm, role: .destructive) {
                     monitor.resetTotals()
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(L.cancel, role: .cancel) {}
             } message: {
-                Text("This will clear all statistics for the all-time totals. This cannot be undone.")
+                Text(L.resetAlertMessage)
             }
             
             Spacer()

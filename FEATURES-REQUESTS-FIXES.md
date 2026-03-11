@@ -63,6 +63,40 @@ The app is English-only. Adding at least one or two major languages (e.g. French
 
 ---
 
+### New Ideas
+
+**13. Configurable notification thresholds**
+Currently the 75/90/100% thresholds are hardcoded. Let users set their own — some people might want an early warning at 50%, others only care about 100%.
+
+**14. Menu bar colour coding by speed**
+Change the colour of the menu bar text dynamically based on how fast the current speed is relative to the user's peak — green when idle/slow, amber at moderate, red when near peak. Gives instant visual feedback at a glance without needing to read numbers.
+
+**15. Historical peak reset**
+The peak rates (shown in Statistics) currently only reset when the user manually resets all totals. A separate "Reset Peaks" button, or auto-reset on a schedule (e.g. daily), would make the peak display more meaningful.
+
+**16. Pause monitoring**
+A menu item to temporarily pause polling — useful when on a metered connection or in a meeting where every background process counts. Could show "⏸" in the menu bar while paused.
+
+**17. iCloud sync for preferences**
+Sync settings (data cap, billing day, sampling interval, theme) across multiple Macs via `NSUbiquitousKeyValueStore`. Useful for people who switch between a MacBook and a desktop.
+
+**18. Today widget / menu bar summary tooltip**
+Expand the existing tooltip (currently just "Download: X / Upload: Y") into a richer summary — today's usage, current cycle usage, and percentage of cap used — so users get key stats without opening Statistics.
+
+**19. Consecutive high-speed alert**
+Notify the user if download or upload stays above a user-defined threshold for a sustained period (e.g. "Upload has been above 50 Mbps for 5 minutes"). Useful for catching runaway background uploads or unexpected downloads.
+
+**20. App-level bandwidth breakdown (future)**
+Show which apps are consuming the most bandwidth. This requires a network extension or system extension with elevated permissions, which is a significantly larger feature, but would be a major differentiator.
+
+**21. Data cap colour indicator in menu bar**
+When data cap tracking is enabled, tint the download arrow (↓) with a warning colour (amber → red) as the user approaches their monthly cap — a passive at-a-glance indicator without needing a notification.
+
+**22. ~~Onboarding / first-launch walkthrough~~** ✅ Completed in v3.0
+~~New users may not know they need to grant notification permission or configure their data cap. A simple one-time modal on first launch guiding them through the key settings would reduce confusion.~~
+
+---
+
 ## Fixes
 
 **F1. ~~Notifications not appearing when app is active~~** ✅ Fixed in v3.0
@@ -80,3 +114,4 @@ Test notification button and data cap alerts were silently suppressed when the S
 - v3.0 — Settings: data cap size replaced with dropdown picker (1 GB – 1 TB) + typed text field
 - v3.0 — Settings: test notification button added to Data Cap section
 - v3.0 — Fix: notifications now display as banners when app is active (`UNUserNotificationCenterDelegate` + `willPresent`)
+- v3.0 — Onboarding: 6-step first-launch walkthrough covering welcome, theme, units, data cap, notifications, and finish; never shown again after completion
