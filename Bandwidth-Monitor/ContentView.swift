@@ -2007,15 +2007,17 @@ nonisolated extension PersistedData: Codable {}
         let t24 = totalsLast24Hours
         let cycle = totalsCurrentCycle
         let prefs = Preferences.shared
-        defaults.set(t24.download, forKey: "widget_24h_down")
-        defaults.set(t24.upload, forKey: "widget_24h_up")
-        defaults.set(cycle.download, forKey: "widget_cycle_down")
-        defaults.set(cycle.upload, forKey: "widget_cycle_up")
+        // UserDefaults doesn't support UInt64 — store as Double (safe up to ~9 PB)
+        defaults.set(Double(t24.download), forKey: "widget_24h_down")
+        defaults.set(Double(t24.upload), forKey: "widget_24h_up")
+        defaults.set(Double(cycle.download), forKey: "widget_cycle_down")
+        defaults.set(Double(cycle.upload), forKey: "widget_cycle_up")
         defaults.set(peakDownPerSecondBytes, forKey: "widget_peak_down")
         defaults.set(peakUpPerSecondBytes, forKey: "widget_peak_up")
         defaults.set(prefs.dataCapEnabled, forKey: "widget_cap_enabled")
         defaults.set(prefs.dataCapGB, forKey: "widget_cap_gb")
-        defaults.set(Date(), forKey: "widget_last_updated")
+        // Store Date as TimeInterval so it round-trips safely
+        defaults.set(Date().timeIntervalSince1970, forKey: "widget_last_updated")
         WidgetCenter.shared.reloadTimelines(ofKind: "BandwidthWidget")
     }
     

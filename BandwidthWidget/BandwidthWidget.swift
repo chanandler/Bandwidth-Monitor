@@ -7,10 +7,10 @@ private let appGroup = "group.com.bandwidth-monitor.shared"
 // MARK: - Entry
 struct BandwidthEntry: TimelineEntry {
     let date: Date
-    let down24h: UInt64
-    let up24h: UInt64
-    let cycleDown: UInt64
-    let cycleUp: UInt64
+    let down24h: Double
+    let up24h: Double
+    let cycleDown: Double
+    let cycleUp: Double
     let peakDown: Double
     let peakUp: Double
     let capEnabled: Bool
@@ -19,14 +19,11 @@ struct BandwidthEntry: TimelineEntry {
 }
 
 // MARK: - Helpers
-private func formatTotal(_ bytes: UInt64) -> String {
-    let factor: Double = 1_000_000_000
-    if bytes == 0 { return "0 GB" }
-    let gb = Double(bytes) / factor
-    if gb >= 1 { return String(format: "%.2f GB", gb) }
-    let mb = Double(bytes) / 1_000_000
-    if mb >= 1 { return String(format: "%.0f MB", mb) }
-    return String(format: "%.0f KB", Double(bytes) / 1_000)
+private func formatTotal(_ bytes: Double) -> String {
+    if bytes <= 0 { return "0 GB" }
+    if bytes >= 1_000_000_000 { return String(format: "%.2f GB", bytes / 1_000_000_000) }
+    if bytes >= 1_000_000     { return String(format: "%.0f MB", bytes / 1_000_000) }
+    return String(format: "%.0f KB", bytes / 1_000)
 }
 
 private func formatRate(_ bytesPerSec: Double) -> String {
@@ -50,7 +47,7 @@ struct BandwidthProvider: TimelineProvider {
             peakDown: 30_000_000,
             peakUp: 5_000_000,
             capEnabled: true,
-            capGB: 30,
+            capGB: 30.0,
             lastUpdated: nil
         )
     }
@@ -68,17 +65,19 @@ struct BandwidthProvider: TimelineProvider {
 
     private func entry() -> BandwidthEntry {
         let d = UserDefaults(suiteName: appGroup)
+        let lastUpdatedInterval = d?.double(forKey: "widget_last_updated") ?? 0
+        let lastUpdated: Date? = lastUpdatedInterval > 0 ? Date(timeIntervalSince1970: lastUpdatedInterval) : nil
         return BandwidthEntry(
             date: Date(),
-            down24h: (d?.object(forKey: "widget_24h_down") as? UInt64) ?? 0,
-            up24h: (d?.object(forKey: "widget_24h_up") as? UInt64) ?? 0,
-            cycleDown: (d?.object(forKey: "widget_cycle_down") as? UInt64) ?? 0,
-            cycleUp: (d?.object(forKey: "widget_cycle_up") as? UInt64) ?? 0,
+            down24h: d?.double(forKey: "widget_24h_down") ?? 0,
+            up24h: d?.double(forKey: "widget_24h_up") ?? 0,
+            cycleDown: d?.double(forKey: "widget_cycle_down") ?? 0,
+            cycleUp: d?.double(forKey: "widget_cycle_up") ?? 0,
             peakDown: d?.double(forKey: "widget_peak_down") ?? 0,
             peakUp: d?.double(forKey: "widget_peak_up") ?? 0,
             capEnabled: d?.bool(forKey: "widget_cap_enabled") ?? false,
             capGB: d?.double(forKey: "widget_cap_gb") ?? 0,
-            lastUpdated: d?.object(forKey: "widget_last_updated") as? Date
+            lastUpdated: lastUpdated
         )
     }
 }
@@ -125,9 +124,9 @@ struct BandwidthWidgetEntryView: View {
             Spacer(minLength: 0)
 
             if entry.capEnabled && entry.capGB > 0 {
-                let capBytes = UInt64(entry.capGB * 1_000_000_000)
+                let capBytes = entry.capGB * 1_000_000_000
                 let used = entry.cycleDown + entry.cycleUp
-                let pct = min(1.0, Double(used) / Double(capBytes))
+                let pct = min(1.0, used / capBytes)
                 VStack(alignment: .leading, spacing: 2) {
                     ProgressView(value: pct)
                         .tint(pct > 0.9 ? .red : pct > 0.75 ? .orange : .green)
@@ -189,9 +188,9 @@ struct BandwidthWidgetEntryView: View {
                 Spacer(minLength: 0)
 
                 if entry.capEnabled && entry.capGB > 0 {
-                    let capBytes = UInt64(entry.capGB * 1_000_000_000)
+                    let capBytes = entry.capGB * 1_000_000_000
                     let used = entry.cycleDown + entry.cycleUp
-                    let pct = min(1.0, Double(used) / Double(capBytes))
+                    let pct = min(1.0, used / capBytes)
                     VStack(alignment: .leading, spacing: 3) {
                         ProgressView(value: pct)
                             .tint(pct > 0.9 ? .red : pct > 0.75 ? .orange : .green)
