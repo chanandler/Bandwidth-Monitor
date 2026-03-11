@@ -10,6 +10,7 @@ import Charts // Optional: for macOS 13+
 import CoreWLAN
 import SystemConfiguration
 import UserNotifications
+import WidgetKit
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -195,9 +196,9 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Label(L.welcomeBullet1, systemImage: "bell.badge.fill")
-                Label(L.welcomeBullet2, systemImage: "network")
-                Label(L.welcomeBullet3, systemImage: "checkmark.seal.fill")
-                Label(L.welcomeBullet4, systemImage: "calendar")
+                Label(L.welcomeBullet2, systemImage: "globe")
+                Label(L.welcomeBullet3, systemImage: "moon.fill")
+                Label(L.welcomeBullet4, systemImage: "bolt.horizontal.fill")
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -443,6 +444,8 @@ struct ThemedBackground: ViewModifier {
             content.background(.ultraThinMaterial)
         case .solid:
             content.background(Color(nsColor: .windowBackgroundColor)).ignoresSafeArea()
+        case .dark:
+            content.background(Color(nsColor: .controlBackgroundColor)).ignoresSafeArea()
         }
     }
 }
@@ -812,23 +815,23 @@ struct L {
                                                "Wählen Sie die Sprache, die Sie in der App verwenden möchten.") }
 
     // MARK: Onboarding – Welcome
-    static var welcomeTitle: String      { tr("Bandwidth Monitor 3.0",  "Bandwidth Monitor 3.0",  "Bandwidth Monitor 3.0") }
+    static var welcomeTitle: String      { tr("Bandwidth Monitor 3.1",  "Bandwidth Monitor 3.1",  "Bandwidth Monitor 3.1") }
     static var majorUpdate: String       { tr("MAJOR UPDATE",           "MISE À JOUR MAJEURE",    "GROSSES UPDATE") }
-    static var welcomeBody: String       { tr("A lot has changed since v2. We've added data cap notifications, a smarter interface picker, improved settings, a full onboarding experience, and plenty of fixes under the hood — all while staying lightweight and private.",
-                                              "Beaucoup de choses ont changé depuis la v2. Nous avons ajouté des notifications de limite de données, un sélecteur d'interface plus intelligent, des paramètres améliorés, une expérience d'accueil complète et de nombreuses corrections — tout en restant léger et privé.",
-                                              "Seit v2 hat sich viel geändert. Wir haben Datenlimit-Benachrichtigungen, eine intelligentere Schnittstellenauswahl, verbesserte Einstellungen, ein vollständiges Onboarding und viele Korrekturen hinzugefügt — alles bei minimalem Ressourcenverbrauch.") }
+    static var welcomeBody: String       { tr("A lot has changed since v2. We've added data cap notifications, language support, dark mode, a smarter interface picker, improved settings, and plenty of fixes — all while staying lightweight and private.",
+                                              "Beaucoup de choses ont changé depuis la v2. Nous avons ajouté des notifications de limite de données, la prise en charge des langues, le mode sombre, un sélecteur d'interface plus intelligent et de nombreuses corrections — tout en restant léger et privé.",
+                                              "Seit v2 hat sich viel geändert. Wir haben Datenlimit-Benachrichtigungen, Sprachunterstützung, Dark Mode, eine intelligentere Schnittstellenauswahl und viele Korrekturen hinzugefügt — alles bei minimalem Ressourcenverbrauch.") }
     static var welcomeBullet1: String    { tr("Data cap alerts at 75%, 90% and 100%",
                                               "Alertes de limite de données à 75 %, 90 % et 100 %",
                                               "Datenlimit-Warnungen bei 75 %, 90 % und 100 %") }
-    static var welcomeBullet2: String    { tr("Accurate interface names via system APIs",
-                                              "Noms d'interface précis via les API système",
-                                              "Genaue Schnittstellennamen über System-APIs") }
-    static var welcomeBullet3: String    { tr("Notifications that work even while the app is open",
-                                              "Notifications qui fonctionnent même lorsque l'application est ouverte",
-                                              "Benachrichtigungen funktionieren auch bei geöffneter App") }
-    static var welcomeBullet4: String    { tr("Billing cycle support up to day 31",
-                                              "Prise en charge du cycle de facturation jusqu'au jour 31",
-                                              "Abrechnungszyklus bis Tag 31 unterstützt") }
+    static var welcomeBullet2: String    { tr("English, French & German language support",
+                                              "Prise en charge de l'anglais, du français et de l'allemand",
+                                              "Englisch, Französisch & Deutsch Sprachunterstützung") }
+    static var welcomeBullet3: String    { tr("Dark mode theme option",
+                                              "Option de thème sombre",
+                                              "Dark-Mode-Theme-Option") }
+    static var welcomeBullet4: String    { tr("Speed test shortcut & billing cycle up to day 31",
+                                              "Raccourci test de vitesse & cycle de facturation jusqu'au jour 31",
+                                              "Speedtest-Verknüpfung & Abrechnungszyklus bis Tag 31") }
     static var welcomeFooter: String     { tr("No accounts. No tracking. Everything stays on your Mac.",
                                               "Pas de comptes. Pas de suivi. Tout reste sur votre Mac.",
                                               "Keine Konten. Kein Tracking. Alles bleibt auf Ihrem Mac.") }
@@ -1562,7 +1565,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
                 // self.statusItem.button?.title = title // old line commented out
                 self.statusItem.button?.appearance = AppDelegate.resolvedNSAppearance()
 
-                self.statusItem.button?.toolTip = "Download: \(rates.download)\nUpload: \(rates.upload)"
+                // Build richer tooltip showing 24h totals, cycle usage, and peaks
+                let t24 = self.monitor.totalsLast24Hours
+                let cycle = self.monitor.totalsCurrentCycle
+                var tip = "Last 24 h:   ↓ \(BandwidthMonitor.formatTotal(bytes: t24.download))  ↑ \(BandwidthMonitor.formatTotal(bytes: t24.upload))"
+                tip += "\nThis cycle:  ↓ \(BandwidthMonitor.formatTotal(bytes: cycle.download))  ↑ \(BandwidthMonitor.formatTotal(bytes: cycle.upload))"
+                if Preferences.shared.dataCapEnabled {
+                    let capBytes = UInt64(Preferences.shared.dataCapGB * 1_000_000_000)
+                    let used = cycle.download + cycle.upload
+                    let pct = capBytes > 0 ? Int((Double(used) / Double(capBytes)) * 100) : 0
+                    tip += "  (\(pct)% of \(Int(Preferences.shared.dataCapGB)) GB cap)"
+                }
+                tip += "\nPeak:        ↓ \(BandwidthMonitor.format(bytes: UInt64(self.monitor.peakDownPerSecondBytes), over: 1.0))  ↑ \(BandwidthMonitor.format(bytes: UInt64(self.monitor.peakUpPerSecondBytes), over: 1.0))"
+                self.statusItem.button?.toolTip = tip
             }
 
         monitor.start()
@@ -1641,11 +1656,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         window.styleMask.insert(NSWindow.StyleMask.closable)
         window.isReleasedWhenClosed = false
 
-        if Preferences.shared.theme == .solid {
-            hosting.view.appearance = NSAppearance(named: .aqua)
-        } else {
-            hosting.view.appearance = NSAppearance(named: .vibrantLight)
-        }
+        hosting.view.appearance = AppDelegate.resolvedNSAppearance()
 
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
@@ -1671,11 +1682,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
 
-        if Preferences.shared.theme == .solid {
-            hosting.view.appearance = NSAppearance(named: .aqua)
-        } else {
-            hosting.view.appearance = NSAppearance(named: .vibrantLight)
-        }
+        hosting.view.appearance = AppDelegate.resolvedNSAppearance()
 
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
@@ -1701,17 +1708,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         window.styleMask.insert([.titled, .closable, .resizable])
         window.isReleasedWhenClosed = false
 
-        // Make window opaque and white to match forced solid background in view
-        window.isOpaque = true
-        window.backgroundColor = .white
-        window.titlebarAppearsTransparent = false
-
-        if Preferences.shared.theme == .solid {
-            hosting.view.appearance = NSAppearance(named: .aqua)
-        } else {
-            hosting.view.appearance = NSAppearance(named: .vibrantLight)
-        }
-
+        hosting.view.appearance = AppDelegate.resolvedNSAppearance()
         applyTheme(to: window)
         let controller = NSWindowController(window: window)
         self.settingsWindowController = controller
@@ -1730,11 +1727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         popover.behavior = .transient
         
         let hostingController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
-        if Preferences.shared.theme == .solid {
-            hostingController.view.appearance = NSAppearance(named: .aqua)
-        } else {
-            hostingController.view.appearance = NSAppearance(named: .vibrantLight)
-        }
+        hostingController.view.appearance = AppDelegate.resolvedNSAppearance()
         popover.contentViewController = hostingController
         
         applyTheme(to: popover)
@@ -1827,6 +1820,7 @@ nonisolated extension PersistedData: Codable {}
     
     private var lastSampleDate: Date?
     private var lastSaveDate: Date = .distantPast
+    private var lastWidgetUpdateDate: Date = .distantPast
     // Tracks which data cap thresholds (75, 90, 100) have already fired a notification this cycle
     private var firedCapThresholds: Set<Int> = []
     // The billing cycle start date when thresholds were last reset, used to detect cycle rollover
@@ -2000,6 +1994,29 @@ nonisolated extension PersistedData: Codable {}
 
         // Check data cap thresholds and fire notifications if needed
         checkDataCapNotifications()
+
+        // Write summary data to shared App Group store for the widget (throttled to ~60s)
+        if now.timeIntervalSince(lastWidgetUpdateDate) >= 60 {
+            updateWidgetSharedData()
+            lastWidgetUpdateDate = now
+        }
+    }
+
+    private func updateWidgetSharedData() {
+        guard let defaults = UserDefaults(suiteName: "group.com.bandwidth-monitor.shared") else { return }
+        let t24 = totalsLast24Hours
+        let cycle = totalsCurrentCycle
+        let prefs = Preferences.shared
+        defaults.set(t24.download, forKey: "widget_24h_down")
+        defaults.set(t24.upload, forKey: "widget_24h_up")
+        defaults.set(cycle.download, forKey: "widget_cycle_down")
+        defaults.set(cycle.upload, forKey: "widget_cycle_up")
+        defaults.set(peakDownPerSecondBytes, forKey: "widget_peak_down")
+        defaults.set(peakUpPerSecondBytes, forKey: "widget_peak_up")
+        defaults.set(prefs.dataCapEnabled, forKey: "widget_cap_enabled")
+        defaults.set(prefs.dataCapGB, forKey: "widget_cap_gb")
+        defaults.set(Date(), forKey: "widget_last_updated")
+        WidgetCenter.shared.reloadTimelines(ofKind: "BandwidthWidget")
     }
     
     private func getPerInterfaceBytes() -> [(name: String, rx: UInt64, tx: UInt64)] {

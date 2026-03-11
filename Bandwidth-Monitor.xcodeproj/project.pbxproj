@@ -8,14 +8,63 @@
 
 /* Begin PBXBuildFile section */
 		225A96E32F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md in Resources */ = {isa = PBXBuildFile; fileRef = 225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */; };
+		225A97052F61975B00BF2CBA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225A97042F61975B00BF2CBA /* WidgetKit.framework */; };
+		225A97072F61975B00BF2CBA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225A97062F61975B00BF2CBA /* SwiftUI.framework */; };
+		225A97122F61975C00BF2CBA /* BandwidthWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		225A97102F61975C00BF2CBA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 225FB6942E9EE90F00838A81 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 225A97012F61975B00BF2CBA;
+			remoteInfo = BandwidthWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		225A97172F61975C00BF2CBA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				225A97122F61975C00BF2CBA /* BandwidthWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "FEATURES-REQUESTS-FIXES.md"; sourceTree = "<group>"; };
+		225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BandwidthWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		225A97042F61975B00BF2CBA /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		225A97062F61975B00BF2CBA /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		225A97192F61982300BF2CBA /* BandwidthWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BandwidthWidgetExtension.entitlements; sourceTree = "<group>"; };
 		225FB69C2E9EE90F00838A81 /* Bandwidth-Monitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Bandwidth-Monitor.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		225A97132F61975C00BF2CBA /* Exceptions for "BandwidthWidget" folder in "BandwidthWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 225A97012F61975B00BF2CBA /* BandwidthWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		225A97082F61975B00BF2CBA /* BandwidthWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				225A97132F61975C00BF2CBA /* Exceptions for "BandwidthWidget" folder in "BandwidthWidgetExtension" target */,
+			);
+			path = BandwidthWidget;
+			sourceTree = "<group>";
+		};
 		225FB69E2E9EE90F00838A81 /* Bandwidth-Monitor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Bandwidth-Monitor";
@@ -24,6 +73,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		225A96FF2F61975B00BF2CBA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				225A97072F61975B00BF2CBA /* SwiftUI.framework in Frameworks */,
+				225A97052F61975B00BF2CBA /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		225FB6992E9EE90F00838A81 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -34,10 +92,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		225A97032F61975B00BF2CBA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				225A97042F61975B00BF2CBA /* WidgetKit.framework */,
+				225A97062F61975B00BF2CBA /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		225FB6932E9EE90F00838A81 = {
 			isa = PBXGroup;
 			children = (
+				225A97192F61982300BF2CBA /* BandwidthWidgetExtension.entitlements */,
 				225FB69E2E9EE90F00838A81 /* Bandwidth-Monitor */,
+				225A97082F61975B00BF2CBA /* BandwidthWidget */,
+				225A97032F61975B00BF2CBA /* Frameworks */,
 				225FB69D2E9EE90F00838A81 /* Products */,
 				225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */,
 			);
@@ -47,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				225FB69C2E9EE90F00838A81 /* Bandwidth-Monitor.app */,
+				225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -54,6 +125,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		225A97012F61975B00BF2CBA /* BandwidthWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 225A97142F61975C00BF2CBA /* Build configuration list for PBXNativeTarget "BandwidthWidgetExtension" */;
+			buildPhases = (
+				225A96FE2F61975B00BF2CBA /* Sources */,
+				225A96FF2F61975B00BF2CBA /* Frameworks */,
+				225A97002F61975B00BF2CBA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				225A97082F61975B00BF2CBA /* BandwidthWidget */,
+			);
+			name = BandwidthWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = BandwidthWidgetExtension;
+			productReference = 225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		225FB69B2E9EE90F00838A81 /* Bandwidth-Monitor */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 225FB6A72E9EE90F00838A81 /* Build configuration list for PBXNativeTarget "Bandwidth-Monitor" */;
@@ -61,10 +154,12 @@
 				225FB6982E9EE90F00838A81 /* Sources */,
 				225FB6992E9EE90F00838A81 /* Frameworks */,
 				225FB69A2E9EE90F00838A81 /* Resources */,
+				225A97172F61975C00BF2CBA /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				225A97112F61975C00BF2CBA /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				225FB69E2E9EE90F00838A81 /* Bandwidth-Monitor */,
@@ -83,9 +178,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
+					225A97012F61975B00BF2CBA = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					225FB69B2E9EE90F00838A81 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -106,11 +204,19 @@
 			projectRoot = "";
 			targets = (
 				225FB69B2E9EE90F00838A81 /* Bandwidth-Monitor */,
+				225A97012F61975B00BF2CBA /* BandwidthWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		225A97002F61975B00BF2CBA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		225FB69A2E9EE90F00838A81 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -122,6 +228,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		225A96FE2F61975B00BF2CBA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		225FB6982E9EE90F00838A81 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -131,7 +244,83 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		225A97112F61975C00BF2CBA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 225A97012F61975B00BF2CBA /* BandwidthWidgetExtension */;
+			targetProxy = 225A97102F61975C00BF2CBA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		225A97152F61975C00BF2CBA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = BandwidthWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54GVQKRDJC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BandwidthWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BandwidthWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TheYarwoods.Bandwidth-Monitor.BandwidthWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		225A97162F61975C00BF2CBA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = BandwidthWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54GVQKRDJC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BandwidthWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = BandwidthWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "TheYarwoods.Bandwidth-Monitor.BandwidthWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		225FB6A52E9EE90F00838A81 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -262,6 +451,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = "Bandwidth-Monitor/Bandwidth-Monitor.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -279,7 +469,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "TheYarwoods.Bandwidth-Monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -298,6 +488,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = "Bandwidth-Monitor/Bandwidth-Monitor.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -315,7 +506,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "TheYarwoods.Bandwidth-Monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -331,6 +522,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		225A97142F61975C00BF2CBA /* Build configuration list for PBXNativeTarget "BandwidthWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				225A97152F61975C00BF2CBA /* Debug */,
+				225A97162F61975C00BF2CBA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		225FB6972E9EE90F00838A81 /* Build configuration list for PBXProject "Bandwidth-Monitor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
