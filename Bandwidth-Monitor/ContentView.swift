@@ -9,6 +9,7 @@ import ServiceManagement
 import Charts // Optional: for macOS 13+
 import CoreWLAN
 import SystemConfiguration
+import UserNotifications
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -331,6 +332,8 @@ struct SettingsView: View {
     @ObservedObject private var prefs = Preferences.shared
     var onClose: (() -> Void)?
     @State private var showRelaunchHint = false
+    @State private var samplingIntervalText: String = ""
+    @State private var dataCapGBText: String = ""
 
     var body: some View {
         if forceSolidBackground {
@@ -378,29 +381,35 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Sampling").font(.headline)
-                Text("Choose a preset or fine-tune below.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Picker("Presets", selection: $prefs.samplingInterval) {
-                    Text("0.25 s").tag(0.25)
-                    Text("0.5 s").tag(0.5)
-                    Text("1 s").tag(1.0)
-                    Text("2 s").tag(2.0)
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
                 Text("Monitoring").font(.headline)
-                HStack {
+                HStack(spacing: 8) {
                     Text("Sampling interval")
                     Spacer()
-                    Stepper(value: $prefs.samplingInterval, in: 0.25...5.0, step: 0.25) {
-                        Text(String(format: "%.2f s", prefs.samplingInterval))
+                    // Dropdown picker for common intervals 0.25s–30s
+                    Picker("", selection: $prefs.samplingInterval) {
+                        ForEach(Array(stride(from: 0.25, through: 30.0, by: 0.25)), id: \.self) { v in
+                            Text(v.truncatingRemainder(dividingBy: 1) == 0
+                                 ? String(format: "%.0f s", v)
+                                 : String(format: "%.2g s", v)
+                            ).tag(v)
+                        }
                     }
-                    .frame(width: 160)
+                    .frame(width: 90)
+                    // Text field for direct typed input
+                    TextField("s", text: $samplingIntervalText)
+                        .frame(width: 52)
+                        .multilineTextAlignment(.trailing)
+                        .onAppear { samplingIntervalText = String(format: "%.2g", prefs.samplingInterval) }
+                        .onChange(of: prefs.samplingInterval) {
+                            samplingIntervalText = String(format: "%.2g", prefs.samplingInterval)
+                        }
+                        .onSubmit {
+                            if let v = Double(samplingIntervalText) {
+                                prefs.samplingInterval = min(30.0, max(0.25, v))
+                            }
+                            samplingIntervalText = String(format: "%.2g", prefs.samplingInterval)
+                        }
+                    Text("s").foregroundStyle(.secondary)
                 }
                 Toggle(isOn: $prefs.showBitsPerSecond) {
                     Text("Show bits per second (instead of bytes)")
@@ -409,7 +418,6 @@ struct SettingsView: View {
                     Text("Use SI units (1000) instead of IEC (1024)")
                 }
             }
-            .padding(.top, 8)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Appearance").font(.headline)
@@ -433,13 +441,34 @@ struct SettingsView: View {
                 Toggle(isOn: $prefs.dataCapEnabled) {
                     Text("Enable monthly data cap tracking")
                 }
-                HStack {
+                HStack(spacing: 8) {
                     Text("Cap size")
                     Spacer()
-                    Stepper(value: $prefs.dataCapGB, in: 1...5000, step: 1) {
-                        Text(String(format: "%.0f GB", prefs.dataCapGB))
+                    // Dropdown picker 1 GB – 1000 GB (1 TB)
+                    Picker("", selection: Binding(
+                        get: { Int(prefs.dataCapGB) },
+                        set: { prefs.dataCapGB = Double($0) }
+                    )) {
+                        ForEach(1...1000, id: \.self) { gb in
+                            Text("\(gb) GB").tag(gb)
+                        }
                     }
-                    .frame(width: 160)
+                    .frame(width: 100)
+                    // Text field for direct typed input
+                    TextField("GB", text: $dataCapGBText)
+                        .frame(width: 52)
+                        .multilineTextAlignment(.trailing)
+                        .onAppear { dataCapGBText = String(Int(prefs.dataCapGB)) }
+                        .onChange(of: prefs.dataCapGB) {
+                            dataCapGBText = String(Int(prefs.dataCapGB))
+                        }
+                        .onSubmit {
+                            if let v = Double(dataCapGBText) {
+                                prefs.dataCapGB = min(1000, max(1, v.rounded()))
+                            }
+                            dataCapGBText = String(Int(prefs.dataCapGB))
+                        }
+                    Text("GB").foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("Billing day")
@@ -451,6 +480,16 @@ struct SettingsView: View {
                     }
                     .frame(width: 120)
                 }
+                Button("Test Notification") {
+                    let content = UNMutableNotificationContent()
+                    content.title = "Notifications Working"
+                    content.body = "Bandwidth Monitor notifications are set up correctly."
+                    content.sound = .default
+                    let request = UNNotificationRequest(identifier: "test.notification", content: content, trigger: nil)
+                    UNUserNotificationCenter.current().add(request) { _ in }
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 4)
             }
 
             if showRelaunchHint {
@@ -591,7 +630,7 @@ struct MenuBarBandwidthMonitorApp: App {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem!
     var monitor: BandwidthMonitor!
     var timerCancellable: AnyCancellable?
@@ -862,7 +901,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
 
         monitor.start()
-        
+
+        // Set delegate so notifications display even when the app is active (e.g. Settings window open)
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
         themeCancellable = Preferences.shared.$theme
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -1092,6 +1135,10 @@ nonisolated extension PersistedData: Codable {}
     
     private var lastSampleDate: Date?
     private var lastSaveDate: Date = .distantPast
+    // Tracks which data cap thresholds (75, 90, 100) have already fired a notification this cycle
+    private var firedCapThresholds: Set<Int> = []
+    // The billing cycle start date when thresholds were last reset, used to detect cycle rollover
+    private var lastKnownCycleStart: Date = .distantPast
     private var samplingCancellable: AnyCancellable?
     
     // Expose as a property
@@ -1258,6 +1305,9 @@ nonisolated extension PersistedData: Codable {}
             upload: BandwidthMonitor.format(bytes: UInt64(avgUp), over: 1.0),
             timestamp: now
         )
+
+        // Check data cap thresholds and fire notifications if needed
+        checkDataCapNotifications()
     }
     
     private func getPerInterfaceBytes() -> [(name: String, rx: UInt64, tx: UInt64)] {
@@ -1400,6 +1450,8 @@ nonisolated extension PersistedData: Codable {}
         self.isFirstSample = true
         self.peakDownPerSecondBytes = 0
         self.peakUpPerSecondBytes = 0
+        self.firedCapThresholds.removeAll()
+        self.lastKnownCycleStart = .distantPast
         self.saveHistory()
         self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     }
@@ -1460,6 +1512,49 @@ nonisolated extension PersistedData: Codable {}
             }
         }
         return (totalRx, totalTx)
+    }
+
+    // Checks current cycle usage against 75%, 90%, and 100% thresholds and fires
+    // a local notification the first time each threshold is crossed per billing cycle.
+    private func checkDataCapNotifications() {
+        let prefs = Preferences.shared
+        guard prefs.dataCapEnabled else { return }
+
+        let cycleStart = currentCycleStart()
+
+        // If the billing cycle has rolled over, reset fired thresholds for the new cycle
+        if cycleStart > lastKnownCycleStart {
+            firedCapThresholds.removeAll()
+            lastKnownCycleStart = cycleStart
+        }
+
+        let capBytes = UInt64(prefs.dataCapGB * 1_000_000_000)
+        guard capBytes > 0 else { return }
+
+        let cycle = totalsCurrentCycle
+        let usedBytes = cycle.download &+ cycle.upload
+        let percent = Int(Double(usedBytes) / Double(capBytes) * 100)
+
+        let thresholds: [(Int, String, String)] = [
+            (75, "Data Cap: 75% Used",  "You've used 75% of your \(Int(prefs.dataCapGB)) GB monthly allowance."),
+            (90, "Data Cap: 90% Used",  "You've used 90% of your \(Int(prefs.dataCapGB)) GB monthly allowance."),
+            (100, "Data Cap Reached",   "You've reached your \(Int(prefs.dataCapGB)) GB monthly data cap.")
+        ]
+
+        for (threshold, title, body) in thresholds {
+            guard percent >= threshold, !firedCapThresholds.contains(threshold) else { continue }
+            firedCapThresholds.insert(threshold)
+            sendNotification(identifier: "datacap.\(threshold)", title: title, body: body)
+        }
+    }
+
+    private func sendNotification(identifier: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { _ in }
     }
 }
 

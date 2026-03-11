@@ -1,15 +1,24 @@
-# Features & Requests
+# Features, Requests & Fixes
 
 ## Planned Features
 
 ## Requested Features
 
+**R1. ~~Sampling interval picker and text input~~** ✅ Completed in v3.0
+~~Allow users to type a value directly and replace the stepper with a picker showing 0.25 s – 30 s in 0.25 s intervals.~~
+
+**R2. ~~Data cap size picker and text input~~** ✅ Completed in v3.0
+~~Remove the stepper and replace with a dropdown picker (1 GB – 1 TB in 1 GB steps) plus a text field for direct typed input.~~
+
+**R3. ~~Test notification button in Settings~~** ✅ Completed in v3.0
+~~A button in the Data Cap section that fires a test notification so users can confirm notifications are working before relying on cap alerts.~~
+
 ## Ideas / Backlog
 
 ### High Value
 
-**1. Notifications for data cap thresholds**
-Alert the user at 75%, 90%, and 100% of their monthly cap. Right now the cap tracking is there but completely silent — you'd only notice if you opened Statistics.
+**1. ~~Notifications for data cap thresholds~~** ✅ Completed in v3.0
+~~Alert the user at 75%, 90%, and 100% of their monthly cap. Right now the cap tracking is there but completely silent — you'd only notice if you opened Statistics.~~
 
 **2. Daily/weekly usage breakdown**
 The app stores 35 days of history but only surfaces "all-time since reset" and "current cycle" totals. A simple bar chart showing usage per day for the last 7 or 30 days would make that stored data actually useful.
@@ -54,8 +63,20 @@ The app is English-only. Adding at least one or two major languages (e.g. French
 
 ---
 
+## Fixes
+
+**F1. ~~Notifications not appearing when app is active~~** ✅ Fixed in v3.0
+Test notification button and data cap alerts were silently suppressed when the Settings window was open. macOS suppresses notifications for the active app by default unless a `UNUserNotificationCenterDelegate` is set. Fixed by conforming `AppDelegate` to `UNUserNotificationCenterDelegate` and implementing `willPresent` to return `.banner` + `.sound`, ensuring notifications display even while the app is frontmost.
+
+---
+
 ## Completed
 - v2.0 — Menu bar bandwidth monitor with upload/download display
 - v3.0 — Code quality improvements (lazy historyURL, removed dead code, @ViewBuilder refactor, relaunch fix, removed legacy availability guards)
 - v3.0 — Network interface auto-naming now uses `SCNetworkInterfaceCopyAll()` for accurate, locale-aware labels (e.g. correctly identifies Wi-Fi vs Ethernet vs Thunderbolt Bridge)
 - v3.0 — Billing day picker extended to 31; `currentCycleStart()` clamps to the last valid day of the month so days 29–31 work correctly in short months
+- v3.0 — Data cap notifications: fires a system notification at 75%, 90%, and 100% usage; each threshold fires once per billing cycle and resets automatically when the cycle rolls over or totals are reset
+- v3.0 — Settings: sampling interval replaced with dropdown picker (0.25 s – 30 s) + typed text field
+- v3.0 — Settings: data cap size replaced with dropdown picker (1 GB – 1 TB) + typed text field
+- v3.0 — Settings: test notification button added to Data Cap section
+- v3.0 — Fix: notifications now display as banners when app is active (`UNUserNotificationCenterDelegate` + `willPresent`)
