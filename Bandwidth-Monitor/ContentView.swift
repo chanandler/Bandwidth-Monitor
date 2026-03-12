@@ -1910,6 +1910,9 @@ nonisolated extension PersistedData: Codable {}
         let interval = max(0.25, prefs.samplingInterval)
         timerSource?.cancel()
         timerSource = nil
+        // Reset first-sample flag so the next poll re-baselines rather than computing
+        // a delta across the gap caused by the interval change
+        isFirstSample = true
         let source = DispatchSource.makeTimerSource(queue: timerQueue)
         source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         source.setEventHandler { [weak self] in
@@ -2163,6 +2166,9 @@ nonisolated extension PersistedData: Codable {}
         self.isFirstSample = true
         self.peakDownPerSecondBytes = 0
         self.peakUpPerSecondBytes = 0
+        self.recentSamples = []
+        self.recentDownRates.removeAll()
+        self.recentUpRates.removeAll()
         self.firedCapThresholds.removeAll()
         self.lastKnownCycleStart = .distantPast
         self.saveHistory()
@@ -2194,8 +2200,11 @@ nonisolated extension PersistedData: Codable {}
         }
 
         // Determine the billing day clamped to this month
-        let firstOfThisMonth = calendar.date(from: DateComponents(year: year, month: month))!
-        let daysInThisMonth = calendar.range(of: .day, in: .month, for: firstOfThisMonth)!.upperBound - 1
+        guard let firstOfThisMonth = calendar.date(from: DateComponents(year: year, month: month)),
+              let monthRange = calendar.range(of: .day, in: .month, for: firstOfThisMonth) else {
+            return calendar.startOfDay(for: now)
+        }
+        let daysInThisMonth = monthRange.upperBound - 1
         let effectiveBillingDayThisMonth = min(billingDay, daysInThisMonth)
 
         if day < effectiveBillingDayThisMonth {
