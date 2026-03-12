@@ -11,6 +11,7 @@ import CoreWLAN
 import SystemConfiguration
 import UserNotifications
 import WidgetKit
+import UniformTypeIdentifiers
 
 struct AboutBandwidthManagerView: View {
     var onClose: (() -> Void)?
@@ -35,6 +36,20 @@ struct AboutBandwidthManagerView: View {
                     .multilineTextAlignment(.center)
                     .font(.body)
                     .padding(.horizontal, 10)
+
+                Button {
+                    if let delegate = NSApp.delegate as? AppDelegate {
+                        delegate.showTipJar(nil)
+                        onClose?()
+                    }
+                } label: {
+                    Text(L.tipJarNudge)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+
                 Button("Close") {
                     onClose?()
                 }
@@ -42,7 +57,7 @@ struct AboutBandwidthManagerView: View {
                 .padding(.bottom, 8)
             }
         }
-        .frame(width: 340, height: 190)
+        .frame(width: 340, height: 210)
         .padding(.top, 0)
         .themedBackground()
     }
@@ -690,6 +705,16 @@ final class Preferences: ObservableObject {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: "appLanguage") }
     }
 
+    enum MenuBarStyle: String, CaseIterable, Identifiable {
+        case text  = "text"
+        case graph = "graph"
+        var id: String { rawValue }
+    }
+
+    @Published var menuBarStyle: MenuBarStyle {
+        didSet { UserDefaults.standard.set(menuBarStyle.rawValue, forKey: "menuBarStyle") }
+    }
+
     private init() {
         // Initialize from system/user defaults
         self.launchAtLogin = Self.currentLaunchAtLogin()
@@ -719,6 +744,12 @@ final class Preferences: ObservableObject {
             // Default to system language if supported, otherwise English
             let sysLang = Locale.current.language.languageCode?.identifier ?? "en"
             self.language = Language(rawValue: sysLang) ?? .english
+        }
+
+        if let raw = UserDefaults.standard.string(forKey: "menuBarStyle"), let s = MenuBarStyle(rawValue: raw) {
+            self.menuBarStyle = s
+        } else {
+            self.menuBarStyle = .text
         }
     }
 
@@ -930,6 +961,27 @@ struct L {
     static var resetConfirm: String      { tr("Reset",              "Réinitialiser",      "Zurücksetzen") }
     static var cancel: String            { tr("Cancel",             "Annuler",            "Abbrechen") }
 
+    // MARK: Statistics – bar chart / export / peaks
+    static var usageHistory: String      { tr("Usage History",      "Historique d'utilisation", "Nutzungsverlauf") }
+    static var last7Days: String         { tr("7 Days",             "7 jours",            "7 Tage") }
+    static var last30Days: String        { tr("30 Days",            "30 jours",           "30 Tage") }
+    static var exportCSV: String         { tr("Export CSV…",        "Exporter CSV…",      "CSV exportieren…") }
+    static var resetPeaks: String        { tr("Reset Peaks",        "Réinitialiser les pics", "Spitzenwerte zurücksetzen") }
+    static var resetPeaksTitle: String   { tr("Reset Peak Rates?",  "Réinitialiser les vitesses de pointe ?", "Spitzenraten zurücksetzen?") }
+    static var resetPeaksMessage: String { tr("This will clear the recorded peak download and upload speeds.",
+                                              "Cela effacera les vitesses de pointe enregistrées.",
+                                              "Dadurch werden die aufgezeichneten Spitzen-Down- und Upload-Geschwindigkeiten gelöscht.") }
+
+    // MARK: Statistics – tip jar nudge
+    static var tipJarNudge: String       { tr("Enjoying the app? You can buy me a coffee ☕",
+                                              "Vous aimez l'app ? Offrez-moi un café ☕",
+                                              "App gefällig? Kauf mir einen Kaffee ☕") }
+
+    // MARK: Settings – menu bar style
+    static var menuBarStyle: String      { tr("Menu Bar Style",     "Style de la barre des menus", "Menüleisten-Stil") }
+    static var menuBarText: String       { tr("Text (↓ speed ↑ speed)", "Texte (↓ vitesse ↑ vitesse)", "Text (↓ Tempo ↑ Tempo)") }
+    static var menuBarGraph: String      { tr("Mini graph",         "Mini graphique",     "Mini-Diagramm") }
+
     // MARK: Notification content
     static func capTitle(pct: Int) -> String {
         switch pct {
@@ -1065,6 +1117,16 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
+                HStack {
+                    Text(L.menuBarStyle)
+                    Spacer()
+                    Picker("", selection: $prefs.menuBarStyle) {
+                        Text(L.menuBarText).tag(Preferences.MenuBarStyle.text)
+                        Text(L.menuBarGraph).tag(Preferences.MenuBarStyle.graph)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -1305,6 +1367,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
     }
 
+    /// Renders a small sparkline image for the menu bar graph mode.
+    /// - Parameter samples: Array of (downloadBytesPerSec, uploadBytesPerSec) ordered oldest→newest.
+    static func drawSparklineImage(samples: [(down: Double, up: Double)], size: NSSize) -> NSImage {
+        let img = NSImage(size: size)
+        img.lockFocus()
+        guard samples.count > 1 else {
+            img.unlockFocus()
+            return img
+        }
+        let w = size.width, h = size.height
+        let maxVal = max(samples.map { max($0.down, $0.up) }.max() ?? 1, 1)
+        let stepX = w / CGFloat(samples.count - 1)
+
+        func path(for values: [Double]) -> NSBezierPath {
+            let p = NSBezierPath()
+            for (i, v) in values.enumerated() {
+                let x = CGFloat(i) * stepX
+                let y = CGFloat(v / maxVal) * (h - 2) + 1
+                if i == 0 { p.move(to: NSPoint(x: x, y: y)) }
+                else       { p.line(to: NSPoint(x: x, y: y)) }
+            }
+            return p
+        }
+
+        let downPath = path(for: samples.map { $0.down })
+        NSColor.systemGreen.setStroke()
+        downPath.lineWidth = 1.2
+        downPath.stroke()
+
+        let upPath = path(for: samples.map { $0.up })
+        NSColor.systemRed.setStroke()
+        upPath.lineWidth = 1.2
+        upPath.stroke()
+
+        img.unlockFocus()
+        img.isTemplate = false
+        return img
+    }
+
     private func applyTheme(to window: NSWindow) {
         window.contentView?.wantsLayer = true
         switch Preferences.shared.theme {
@@ -1512,58 +1613,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             .receive(on: RunLoop.main)
             .sink { [weak self] (rates: BandwidthRates) in
                 guard let self = self else { return }
-                let title = "↓ \(rates.download) ↑ \(rates.upload)"
-                let isSolid = (Preferences.shared.theme == .solid)
 
-                // Build attributed string with green download and red upload
-                let fullString = NSMutableAttributedString(string: title)
-                let fullRange = NSRange(location: 0, length: fullString.length)
+                let useGraph = (Preferences.shared.menuBarStyle == .graph)
 
-                // Use a darker green for download text
-                // let darkGreen = NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0)
+                if useGraph {
+                    // Graph mode: draw a mini sparkline as the button image
+                    let samples = self.monitor.recentSamples
+                    let img = AppDelegate.drawSparklineImage(
+                        samples: samples.map { (Double($0.down) / $0.dt, Double($0.up) / $0.dt) },
+                        size: NSSize(width: 44, height: 18)
+                    )
+                    self.statusItem.button?.image = img
+                    self.statusItem.button?.attributedTitle = NSAttributedString(string: "")
+                    self.statusItem.length = 50
+                } else {
+                    // Text mode (default)
+                    self.statusItem.button?.image = nil
+                    // Restore fixed text width if it was changed
+                    if let button = self.statusItem.button {
+                        let font = button.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+                        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+                        let templates = [
+                            "↓ 88888 Mbps ↑ 88888 Mbps",
+                            "↓ 88888 Gbps ↑ 88888 Gbps",
+                            "↓ 88888 kB/s ↑ 88888 kB/s",
+                            "↓ 88888 MB/s ↑ 88888 MB/s",
+                            "↓ 88888 GB/s ↑ 88888 GB/s"
+                        ]
+                        var maxWidth: CGFloat = 0
+                        for t in templates { let w = (t as NSString).size(withAttributes: attrs).width; if w > maxWidth { maxWidth = w } }
+                        self.statusItem.length = ceil(maxWidth + 20)
+                    }
 
-                // Helper to bold numeric parts (digits, dots, commas) in a given range
-                func boldNumbers(in attributed: NSMutableAttributedString, title: String, range: NSRange) {
-                    let pattern = "[0-9.,]+"
-                    if let regex = try? NSRegularExpression(pattern: pattern) {
-                        let nsTitle = title as NSString
-                        let subString = nsTitle.substring(with: range)
-                        let subRange = NSRange(location: 0, length: (subString as NSString).length)
-                        let boldFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .bold)
-                        for match in regex.matches(in: subString, range: subRange) {
-                            let adjusted = NSRange(location: range.location + match.range.location, length: match.range.length)
-                            attributed.addAttribute(.font, value: boldFont, range: adjusted)
+                    let title = "↓ \(rates.download) ↑ \(rates.upload)"
+                    let isSolid = (Preferences.shared.theme == .solid)
+
+                    let fullString = NSMutableAttributedString(string: title)
+                    let fullRange = NSRange(location: 0, length: fullString.length)
+
+                    func boldNumbers(in attributed: NSMutableAttributedString, title: String, range: NSRange) {
+                        let pattern = "[0-9.,]+"
+                        if let regex = try? NSRegularExpression(pattern: pattern) {
+                            let nsTitle = title as NSString
+                            let subString = nsTitle.substring(with: range)
+                            let subRange = NSRange(location: 0, length: (subString as NSString).length)
+                            let boldFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+                            for match in regex.matches(in: subString, range: subRange) {
+                                let adjusted = NSRange(location: range.location + match.range.location, length: match.range.length)
+                                attributed.addAttribute(.font, value: boldFont, range: adjusted)
+                            }
                         }
                     }
+
+                    fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+                    fullString.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular), range: fullRange)
+
+                    let downloadString = "↓ \(rates.download)"
+                    if let downloadRange = title.range(of: downloadString) {
+                        let nsDownloadRange = NSRange(downloadRange, in: title)
+                        let downloadColor: NSColor = isSolid ? NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0) : NSColor.systemGreen
+                        fullString.addAttribute(.foregroundColor, value: downloadColor, range: nsDownloadRange)
+                        boldNumbers(in: fullString, title: title, range: nsDownloadRange)
+                    }
+
+                    let uploadString = "↑ \(rates.upload)"
+                    if let uploadRange = title.range(of: uploadString) {
+                        let nsUploadRange = NSRange(uploadRange, in: title)
+                        fullString.addAttribute(.foregroundColor, value: NSColor.systemRed, range: nsUploadRange)
+                        boldNumbers(in: fullString, title: title, range: nsUploadRange)
+                    }
+
+                    self.statusItem.button?.attributedTitle = fullString
                 }
 
-                // Default attributes
-                fullString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
-                fullString.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular), range: fullRange)
-
-                // Find range of download part: "↓ \(rates.download)"
-                let downloadString = "↓ \(rates.download)"
-                if let downloadRange = title.range(of: downloadString) {
-                    let nsDownloadRange = NSRange(downloadRange, in: title)
-                    let downloadColor: NSColor = isSolid ? NSColor(calibratedRed: 0.0, green: 0.45, blue: 0.0, alpha: 1.0) : NSColor.systemGreen
-                    fullString.addAttribute(.foregroundColor, value: downloadColor, range: nsDownloadRange)
-                    // Bold the numeric portion of the download string
-                    boldNumbers(in: fullString, title: title, range: nsDownloadRange)
-                }
-
-                // Find range of upload part: "↑ \(rates.upload)"
-                let uploadString = "↑ \(rates.upload)"
-                if let uploadRange = title.range(of: uploadString) {
-                    let nsUploadRange = NSRange(uploadRange, in: title)
-                    let uploadColor: NSColor = NSColor.systemRed
-                    fullString.addAttribute(.foregroundColor, value: uploadColor, range: nsUploadRange)
-                    // Bold the numeric portion of the upload string
-                    boldNumbers(in: fullString, title: title, range: nsUploadRange)
-                }
-
-                // Set the attributed string to statusItem.button
-                self.statusItem.button?.attributedTitle = fullString
-                // self.statusItem.button?.title = title // old line commented out
                 self.statusItem.button?.appearance = AppDelegate.resolvedNSAppearance()
 
                 // Build richer tooltip showing 24h totals, cycle usage, and peaks
@@ -1725,7 +1847,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             return
         }
         let popover = NSPopover()
-        popover.contentSize = NSSize(width: 340, height: 210)
+        popover.contentSize = NSSize(width: 340, height: 520)
         popover.behavior = .transient
         
         let hostingController = NSHostingController(rootView: BandwidthTotalsView(monitor: monitor))
@@ -2174,6 +2296,11 @@ nonisolated extension PersistedData: Codable {}
         self.saveHistory()
         self.rates = BandwidthRates(download: "0 Mbps", upload: "0 Mbps", timestamp: Date())
     }
+
+    func resetPeaks() {
+        self.peakDownPerSecondBytes = 0
+        self.peakUpPerSecondBytes = 0
+    }
     
     private func currentCycleStart(now: Date = Date()) -> Date {
         let calendar = Calendar.current
@@ -2236,6 +2363,39 @@ nonisolated extension PersistedData: Codable {}
         return (totalRx, totalTx)
     }
 
+    /// Returns an array of (date, downloadBytes, uploadBytes) for the last `days` calendar days,
+    /// oldest first. Each entry represents the summed delta for that UTC calendar day.
+    func dailyTotals(days: Int) -> [(date: Date, download: UInt64, upload: UInt64)] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let cutoff = calendar.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+
+        // Build a dict of startOfDay → (rx, tx) sums
+        var buckets: [Date: (download: UInt64, upload: UInt64)] = [:]
+
+        func safeDelta(newer: UInt64, older: UInt64) -> UInt64 {
+            newer >= older ? newer &- older : newer
+        }
+
+        for i in 1..<history.count {
+            let t0 = history[i - 1]
+            let t1 = history[i]
+            guard t1.timestamp >= cutoff else { continue }
+            let day = calendar.startOfDay(for: t1.timestamp)
+            let dx = safeDelta(newer: t1.rx, older: t0.rx)
+            let tx = safeDelta(newer: t1.tx, older: t0.tx)
+            buckets[day, default: (0, 0)].download &+= dx
+            buckets[day, default: (0, 0)].upload   &+= tx
+        }
+
+        // Fill every day in range so the chart has no gaps
+        return (0..<days).compactMap { offset -> (date: Date, download: UInt64, upload: UInt64)? in
+            guard let d = calendar.date(byAdding: .day, value: offset, to: cutoff) else { return nil }
+            let v = buckets[d] ?? (0, 0)
+            return (d, v.download, v.upload)
+        }
+    }
+
     // Checks current cycle usage against 75%, 90%, and 100% thresholds and fires
     // a local notification the first time each threshold is crossed per billing cycle.
     private func checkDataCapNotifications() {
@@ -2284,98 +2444,201 @@ nonisolated extension PersistedData: Codable {}
 struct BandwidthTotalsView: View {
     @ObservedObject var monitor: BandwidthMonitor
     @State private var showResetAlert = false
-    
+    @State private var showResetPeaksAlert = false
+    @State private var historyDays: Int = 7   // 7 or 30
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L.totalData)
-                .font(.title2).bold()
-            
-            if #available(macOS 13.0, *) {
-                Chart {
-                    ForEach(monitor.recentSamples, id: \.time) { sample in
-                        LineMark(x: .value("Time", sample.time), y: .value("Down", Double(sample.down) / sample.dt))
-                            .foregroundStyle(.green)
-                        LineMark(x: .value("Time", sample.time), y: .value("Up", Double(sample.up) / sample.dt))
-                            .foregroundStyle(.red)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(L.totalData)
+                    .font(.title2).bold()
+
+                // MARK: Live sparkline
+                if #available(macOS 13.0, *) {
+                    Chart {
+                        ForEach(monitor.recentSamples, id: \.time) { sample in
+                            LineMark(x: .value("Time", sample.time), y: .value("Down", Double(sample.down) / sample.dt))
+                                .foregroundStyle(.green)
+                            LineMark(x: .value("Time", sample.time), y: .value("Up", Double(sample.up) / sample.dt))
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .chartXAxis(.hidden)
+                    .chartYAxis(.hidden)
+                    .frame(height: 80)
+                } else {
+                    SparklineView(samples: monitor.recentSamples.map { (time: $0.time, down: Double($0.down) / $0.dt, up: Double($0.up) / $0.dt) })
+                        .frame(height: 80)
+                }
+
+                // MARK: All-time totals
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(L.download).font(.headline)
+                        Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.download))
+                            .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
+                    Spacer()
+                    VStack(alignment: .leading) {
+                        Text(L.upload).font(.headline)
+                        Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.upload))
+                            .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.red)
                     }
                 }
-                .chartXAxis(.hidden)
-                .chartYAxis(.hidden)
-                .frame(height: 80)
-            } else {
-                SparklineView(samples: monitor.recentSamples.map { (time: $0.time, down: Double($0.down) / $0.dt, up: Double($0.up) / $0.dt) })
-                    .frame(height: 80)
-            }
-            
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(L.download)
-                        .font(.headline)
-                    Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.download))
-                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
-                }
-                Spacer()
-                VStack(alignment: .leading) {
-                    Text(L.upload)
-                        .font(.headline)
-                    Text(BandwidthMonitor.formatTotal(bytes: monitor.totalsAllTime.upload))
-                        .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.red)
-                }
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L.peakRates).font(.headline)
-                HStack {
-                    Text(L.down)
-                    Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakDownPerSecondBytes), over: 1.0))
-                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
-                    Spacer()
-                    Text(L.up)
-                    Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakUpPerSecondBytes), over: 1.0))
-                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.red)
-                }
-            }
-            
-            if Preferences.shared.dataCapEnabled {
-                let cycle = monitor.totalsCurrentCycle
-                let capBytes = UInt64(Preferences.shared.dataCapGB * 1000 * 1000 * 1000)
-                let usedBytes = cycle.download &+ cycle.upload
-                let remaining = capBytes > usedBytes ? capBytes &- usedBytes : 0
+
+                // MARK: Peak rates
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L.currentCycleUsage).font(.headline)
-                    Text("\(L.usedRemaining): \(BandwidthMonitor.formatTotal(bytes: usedBytes))  •  \(L.remaining): \(BandwidthMonitor.formatTotal(bytes: remaining))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text(L.peakRates).font(.headline)
+                        Spacer()
+                        Button(L.resetPeaks) {
+                            showResetPeaksAlert = true
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .alert(L.resetPeaksTitle, isPresented: $showResetPeaksAlert) {
+                            Button(L.resetConfirm, role: .destructive) {
+                                monitor.resetPeaks()
+                            }
+                            Button(L.cancel, role: .cancel) {}
+                        } message: {
+                            Text(L.resetPeaksMessage)
+                        }
+                    }
+                    HStack {
+                        Text(L.down)
+                        Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakDownPerSecondBytes), over: 1.0))
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.green)
+                        Spacer()
+                        Text(L.up)
+                        Text(BandwidthMonitor.format(bytes: UInt64(monitor.peakUpPerSecondBytes), over: 1.0))
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.red)
+                    }
+                }
+
+                // MARK: Current cycle / data cap
+                if Preferences.shared.dataCapEnabled {
+                    let cycle = monitor.totalsCurrentCycle
+                    let capBytes = UInt64(Preferences.shared.dataCapGB * 1_000_000_000)
+                    let usedBytes = cycle.download &+ cycle.upload
+                    let remaining = capBytes > usedBytes ? capBytes &- usedBytes : 0
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L.currentCycleUsage).font(.headline)
+                        Text("\(L.usedRemaining): \(BandwidthMonitor.formatTotal(bytes: usedBytes))  •  \(L.remaining): \(BandwidthMonitor.formatTotal(bytes: remaining))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+
+                // MARK: Daily/weekly bar chart
+                if #available(macOS 13.0, *) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(L.usageHistory).font(.headline)
+                            Spacer()
+                            Picker("", selection: $historyDays) {
+                                Text(L.last7Days).tag(7)
+                                Text(L.last30Days).tag(30)
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
+
+                        let daily = monitor.dailyTotals(days: historyDays)
+                        let dateFormatter: DateFormatter = {
+                            let f = DateFormatter()
+                            f.dateFormat = historyDays == 7 ? "EEE" : "d"
+                            return f
+                        }()
+
+                        Chart {
+                            ForEach(daily, id: \.date) { entry in
+                                BarMark(
+                                    x: .value("Day", dateFormatter.string(from: entry.date)),
+                                    y: .value("Down", Double(entry.download) / 1_073_741_824)
+                                )
+                                .foregroundStyle(.green.opacity(0.8))
+                                BarMark(
+                                    x: .value("Day", dateFormatter.string(from: entry.date)),
+                                    y: .value("Up", Double(entry.upload) / 1_073_741_824)
+                                )
+                                .foregroundStyle(.red.opacity(0.6))
+                            }
+                        }
+                        .chartYAxisLabel("GB")
+                        .frame(height: 110)
+                    }
+                    .padding(.top, 4)
+                }
+
+                // MARK: Action buttons
+                HStack(spacing: 8) {
+                    Button {
+                        exportCSV()
+                    } label: {
+                        Text(L.exportCSV).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(role: .destructive) {
+                        showResetAlert = true
+                    } label: {
+                        Text(L.resetTotals).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .alert(L.resetAlertTitle, isPresented: $showResetAlert) {
+                        Button(L.resetConfirm, role: .destructive) { monitor.resetTotals() }
+                        Button(L.cancel, role: .cancel) {}
+                    } message: {
+                        Text(L.resetAlertMessage)
+                    }
                 }
                 .padding(.top, 8)
-            }
-            
-            Button(role: .destructive) {
-                showResetAlert = true
-            } label: {
-                Text(L.resetTotals)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.top, 16)
-            .buttonStyle(.borderedProminent)
-            .alert(L.resetAlertTitle, isPresented: $showResetAlert) {
-                Button(L.resetConfirm, role: .destructive) {
-                    monitor.resetTotals()
+
+                // MARK: Tip jar nudge
+                Button {
+                    if let delegate = NSApp.delegate as? AppDelegate {
+                        delegate.showTipJar(nil)
+                    }
+                } label: {
+                    Text(L.tipJarNudge)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .underline()
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-                Button(L.cancel, role: .cancel) {}
-            } message: {
-                Text(L.resetAlertMessage)
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+
+                Spacer()
             }
-            
-            Spacer()
+            .padding(18)
         }
-        .frame(width: 320)
-        .padding(18)
+        .frame(width: 340, height: 520)
         .themedBackground()
+    }
+
+    private func exportCSV() {
+        let daily = monitor.dailyTotals(days: 35)
+        var csv = "date,download_bytes,upload_bytes\n"
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withFullDate]
+        for entry in daily {
+            csv += "\(iso.string(from: entry.date)),\(entry.download),\(entry.upload)\n"
+        }
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "bandwidth-usage.csv"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? csv.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
 }
 

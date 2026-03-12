@@ -20,11 +20,11 @@
 **1. ~~Notifications for data cap thresholds~~** ✅ Completed in v3.0
 ~~Alert the user at 75%, 90%, and 100% of their monthly cap. Right now the cap tracking is there but completely silent — you'd only notice if you opened Statistics.~~
 
-**2. Daily/weekly usage breakdown**
-The app stores 35 days of history but only surfaces "all-time since reset" and "current cycle" totals. A simple bar chart showing usage per day for the last 7 or 30 days would make that stored data actually useful.
+**2. ~~Daily/weekly usage breakdown~~** ✅ Completed in v3.2
+~~The app stores 35 days of history but only surfaces "all-time since reset" and "current cycle" totals. A simple bar chart showing usage per day for the last 7 or 30 days would make that stored data actually useful.~~
 
-**3. Menubar icon alternative**
-An option to show a small graph icon (mini sparkline) in the menu bar instead of text — useful for people who want to save space but still see activity at a glance.
+**3. ~~Menubar icon alternative~~** ✅ Completed in v3.2
+~~An option to show a small graph icon (mini sparkline) in the menu bar instead of text — useful for people who want to save space but still see activity at a glance.~~
 
 **4. ~~Network interface auto-naming improvement~~** ✅ Completed in v3.0
 ~~Currently `en0` might show as "Ethernet (en0)" even if it's actually Wi-Fi. The CoreWLAN lookup handles one interface but if the Wi-Fi BSD name doesn't match, the label is wrong. Using `SCNetworkConfiguration` to get real interface display names would be more accurate.~~
@@ -33,8 +33,8 @@ An option to show a small graph icon (mini sparkline) in the menu bar instead of
 
 ### Medium Value
 
-**5. Export usage data**
-A button to export history as CSV (date, download bytes, upload bytes) — useful for people tracking their ISP billing or doing their own analysis.
+**5. ~~Export usage data~~** ✅ Completed in v3.2
+~~A button to export history as CSV (date, download bytes, upload bytes) — useful for people tracking their ISP billing or doing their own analysis.~~
 
 **6. Adjustable smoothing window in Settings**
 `smoothWindow` is hardcoded at 5. Exposing this (e.g. 1 = raw, 5 = smooth, 10 = very smooth) would let users tune responsiveness vs. stability.
@@ -71,8 +71,8 @@ Currently the 75/90/100% thresholds are hardcoded. Let users set their own — s
 **14. Menu bar colour coding by speed**
 Change the colour of the menu bar text dynamically based on how fast the current speed is relative to the user's peak — green when idle/slow, amber at moderate, red when near peak. Gives instant visual feedback at a glance without needing to read numbers.
 
-**15. Historical peak reset**
-The peak rates (shown in Statistics) currently only reset when the user manually resets all totals. A separate "Reset Peaks" button, or auto-reset on a schedule (e.g. daily), would make the peak display more meaningful.
+**15. ~~Historical peak reset~~** ✅ Completed in v3.2
+~~The peak rates (shown in Statistics) currently only reset when the user manually resets all totals. A separate "Reset Peaks" button, or auto-reset on a schedule (e.g. daily), would make the peak display more meaningful.~~
 
 **16. Pause monitoring**
 A menu item to temporarily pause polling — useful when on a metered connection or in a meeting where every background process counts. Could show "⏸" in the menu bar while paused.
@@ -95,11 +95,11 @@ When data cap tracking is enabled, tint the download arrow (↓) with a warning 
 **22. ~~Onboarding / first-launch walkthrough~~** ✅ Completed in v3.0
 ~~New users may not know they need to grant notification permission or configure their data cap. A simple one-time modal on first launch guiding them through the key settings would reduce confusion.~~
 
-**23. Daily/weekly bar chart in Statistics**
-The app stores 35 days of history but the Statistics view only shows a 5-minute sparkline and lifetime/cycle totals. A bar chart (toggle between 7-day and 30-day view) grouped by day would surface all that stored data. Swift Charts is already used for the sparkline, so the foundation is there.
+**23. ~~Daily/weekly bar chart in Statistics~~** ✅ Completed in v3.2
+~~The app stores 35 days of history but the Statistics view only shows a 5-minute sparkline and lifetime/cycle totals. A bar chart (toggle between 7-day and 30-day view) grouped by day would surface all that stored data. Swift Charts is already used for the sparkline, so the foundation is there.~~
 
-**24. Export usage data as CSV**
-A button in Statistics to export the 35-day history as a CSV file (date, download bytes, upload bytes). Useful for tracking ISP billing or external analysis. All the data is already persisted — it just needs writing out via an `NSSavePanel`.
+**24. ~~Export usage data as CSV~~** ✅ Completed in v3.2
+~~A button in Statistics to export the 35-day history as a CSV file (date, download bytes, upload bytes). Useful for tracking ISP billing or external analysis. All the data is already persisted — it just needs writing out via an `NSSavePanel`.~~
 
 **25. Per-interface breakdown in Statistics**
 The monitor already calls `getPerInterfaceBytes()` internally but aggregates everything to a single total for display. Surfacing a Wi-Fi vs Ethernet (vs other) split in the Statistics view would be useful on machines with multiple active connections.
@@ -110,11 +110,11 @@ The monitor already calls `getPerInterfaceBytes()` internally but aggregates eve
 **27. ~~Notification Center / desktop widget~~** ✅ Completed in v3.1
 ~~A WidgetKit widget (small and medium sizes) showing last 24 h download/upload totals, current billing cycle usage, data cap progress bar, and peak speeds. Data is written to a shared App Group store by the main app every ~60 seconds and the widget refreshes every 15 minutes or whenever the main app triggers a reload.~~
 
-**28. Subtle tip jar nudge**
-A gentle, non-intrusive reminder that encourages users to support the app via the Tip Jar. Should appear in a few places:
-- A small "enjoying the app? Buy me a coffee ☕" line with a clickable link in the Statistics view
-- A soft prompt in the About window beneath the version number
-- An occasional (e.g. once every 30 days) banner notification — only shown to users who have never tipped, and never shown more than 3 times total so it never becomes annoying
+**28. ~~Subtle tip jar nudge~~** ✅ Completed in v3.2
+~~A gentle, non-intrusive reminder that encourages users to support the app via the Tip Jar. Should appear in a few places:~~
+~~- A small "enjoying the app? Buy me a coffee ☕" line with a clickable link in the Statistics view~~
+~~- A soft prompt in the About window beneath the version number~~
+~~- An occasional (e.g. once every 30 days) banner notification — only shown to users who have never tipped, and never shown more than 3 times total so it never becomes annoying~~
 
 ---
 
@@ -141,3 +141,8 @@ Test notification button and data cap alerts were silently suppressed when the S
 - v3.1 — Dark mode: added `.dark` theme option; all windows, popovers, and view backgrounds now correctly apply `.darkAqua` appearance; removed hardcoded `.vibrantLight` from About, Tip Jar, Settings, and Details popover
 - v3.1 — Richer menu bar tooltip: hovering the menu bar item now shows last 24 h totals, current cycle totals, data cap % (if enabled), and peak speeds
 - v3.1 — Notification Center / desktop widget: WidgetKit extension (small + medium) showing 24 h usage, cycle totals, cap progress bar, and peak speeds; main app writes to shared App Group store every ~60 s and triggers widget reload
+- v3.2 — Daily/weekly bar chart in Statistics: toggle between 7-day and 30-day views using Swift Charts `BarMark`; data grouped by calendar day from the existing 35-day history store
+- v3.2 — Menu bar graph mode: new "Mini graph" option in Settings (Appearance section) draws a live sparkline of recent download/upload rates in the menu bar instead of text
+- v3.2 — Export CSV: "Export CSV…" button in Statistics writes 35-day history (date, download bytes, upload bytes) via `NSSavePanel`
+- v3.2 — Reset Peaks: separate "Reset Peaks" button next to the Peak Rates heading in Statistics; clears only peak download and upload values with a confirmation alert
+- v3.2 — Tip jar nudge: clickable "Enjoying the app? Buy me a coffee ☕" link in Statistics view and in About window; both open the Tip Jar window
