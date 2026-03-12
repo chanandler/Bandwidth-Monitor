@@ -545,60 +545,61 @@ struct TipJarView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Tip Jar")
-                    .font(.title2).bold()
-                Text("If you find Bandwidth Monitor useful, consider buying me a coffee. Thank you!")
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Tip Jar")
+                .font(.title2).bold()
+            Text("If you find Bandwidth Monitor useful, consider buying me a coffee. Thank you!")
+                .foregroundStyle(.secondary)
 
-                if manager.isLoading {
-                    ProgressView("Loading…")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                } else if let err = manager.lastError {
-                    VStack(spacing: 8) {
-                        Text("Couldn’t load products.")
-                        Text(err).font(.footnote).foregroundStyle(.secondary)
-                        Button("Retry") { Task { await manager.load() } }
-                    }
+            if manager.isLoading {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else if let err = manager.lastError {
+                VStack(spacing: 8) {
+                    Text("Couldn't load products.")
+                    Text(err).font(.footnote).foregroundStyle(.secondary)
+                    Button("Retry") { Task { await manager.load() } }
+                }
+                .frame(maxWidth: .infinity)
+            } else if manager.products.isEmpty {
+                Text("No tip options are currently available.")
                     .frame(maxWidth: .infinity)
-                } else if manager.products.isEmpty {
-                    Text("No tip options are currently available.")
-                        .frame(maxWidth: .infinity)
-                } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Buy me a coffee")
-                            .font(.headline)
-                        Text("Support development with a small tip.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        HStack {
-                            Spacer()
-                            Button(manager.purchaseInProgress ? "…" : (manager.coffeeProduct.map { "\($0.displayName) – \($0.displayPrice)" } ?? "Tip")) {
-                                if let product = manager.coffeeProduct {
-                                    Task { await manager.tip(product) }
-                                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Buy me a coffee")
+                        .font(.headline)
+                    Text("Support development with a small tip.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Spacer()
+                        Button(manager.purchaseInProgress ? "…" : (manager.coffeeProduct.map { "\($0.displayName) – \($0.displayPrice)" } ?? "Tip")) {
+                            if let product = manager.coffeeProduct {
+                                Task { await manager.tip(product) }
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(manager.purchaseInProgress || manager.coffeeProduct == nil)
-                            
-                            if let msg = manager.lastPurchaseMessage {
-                                Text(msg)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(manager.purchaseInProgress || manager.coffeeProduct == nil)
+
+                        if let msg = manager.lastPurchaseMessage {
+                            Text(msg)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
+            }
 
-                HStack {
-                    Spacer()
-                    Button("Close") { onClose?() }
-                        .keyboardShortcut(.cancelAction)
-                }
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button("Close") { onClose?() }
+                    .keyboardShortcut(.cancelAction)
             }
         }
         .padding(18)
+        .frame(minWidth: 380, minHeight: 220)
         .themedBackground()
         .task { await manager.load() }
     }
