@@ -7,10 +7,12 @@
 		<key>Bandwidth-Monitor.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>1</integer>
 		</dict>
 		<key>BandwidthWidgetExtension.xcscheme_^#shared#^_</key>
 		<dict>
+			<key>isShown</key>
+			<false/>
 			<key>orderHint</key>
 			<integer>0</integer>
 		</dict>
@@ -18,11 +20,6 @@
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
 		<key>225A97012F61975B00BF2CBA</key>
-		<dict>
-			<key>primary</key>
-			<true/>
-		</dict>
-		<key>225FB69B2E9EE90F00838A81</key>
 		<dict>
 			<key>primary</key>
 			<true/>

@@ -614,7 +614,7 @@ struct TipJarView: View {
             }
         }
         .padding(18)
-        .frame(minWidth: 380, minHeight: 220)
+        .frame(width: 380, height: 240)
         .themedBackground()
         .task { await manager.load() }
     }
@@ -1801,9 +1801,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let hosting = NSHostingController(rootView: contentView)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Tip Jar"
-        window.setContentSize(NSSize(width: 380, height: 260))
-        window.contentMinSize = NSSize(width: 340, height: 220)
-        window.styleMask.insert([.titled, .closable, .resizable])
+        window.setContentSize(NSSize(width: 380, height: 240))
+        window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
 
         hosting.view.appearance = AppDelegate.resolvedNSAppearance()
@@ -1813,6 +1812,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         self.tipWindowController = controller
         controller.showWindow(self)
         window.center()
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     @objc func showSettings(_ sender: Any?) {
