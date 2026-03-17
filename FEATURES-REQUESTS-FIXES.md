@@ -150,6 +150,36 @@ Allow users to generate a diagnostic report (recent rates, network changes, erro
 **38. Accessibility Optimizations**  
 Add VoiceOver navigation, larger text support, and high-contrast theme options to make the app more usable for everyone.
 
+**39. Bandwidth Usage Widgets for visionOS**  
+Provide 3D/spatial widgets for visionOS, enabling users to see floating usage graphs or data caps in their environment.
+
+**40. Liquid Glass Menu Bar Design**  
+Adopt Apple's Liquid Glass design for the menu bar and main windows, creating a modern, fluid look that adapts to backgrounds and light.
+
+**41. Visual Intelligence Integration**  
+Let users scan their networking environment or hardware setup via camera and match it to troubleshooting tips or usage analytics.
+
+**42. Scheduled Quiet Hours**  
+Allow users to define time windows when notifications and usage alerts are suppressed—ideal for meetings, sleep, or focus time.
+
+**43. Family/Shared Network Usage Tracking**  
+Support for syncing and aggregating data usage across multiple Macs (and possibly iOS devices) for a shared home or office connection.
+
+**44. Detailed ISP Outage Reporting**  
+Automatically detect and log network outages, attempt root-cause analysis, and present a timeline for the user to share with their ISP.
+
+**45. App Privacy Insights**  
+Summarize privacy risks by tracking which apps/services send or receive data with non-local servers.
+
+**46. Power/Energy Impact Monitoring**  
+Estimate and display the energy impact of heavy network activity on battery life and thermal load.
+
+**47. System Dashboard Widget**  
+Add a system Dashboard widget (if macOS version supports it) with customizable stats for quick at-a-glance usage checks.
+
+**48. Proactive ISP Plan Recommendations**  
+Analyze the user's long-term usage and suggest ISP plans that match their needs more closely, including cost and speed comparisons.
+
 ---
 
 ## Fixes
@@ -180,3 +210,4 @@ Test notification button and data cap alerts were silently suppressed when the S
 - v3.2 — Export CSV: "Export CSV…" button in Statistics writes 35-day history (date, download bytes, upload bytes) via `NSSavePanel`
 - v3.2 — Reset Peaks: separate "Reset Peaks" button next to the Peak Rates heading in Statistics; clears only peak download and upload values with a confirmation alert
 - v3.2 — Tip jar nudge: clickable "Enjoying the app? Buy me a coffee ☕" link in Statistics view and in About window; both open the Tip Jar window
+
