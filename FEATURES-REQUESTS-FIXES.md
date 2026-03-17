@@ -76,21 +76,26 @@ Change the colour of the menu bar text dynamically based on how fast the current
 
 **16. Pause monitoring**
 A menu item to temporarily pause polling — useful when on a metered connection or in a meeting where every background process counts. Could show "⏸" in the menu bar while paused.
+- Explanation: This helps users conserve bandwidth and reduces distractions by temporarily halting data monitoring during important times.
 
 **17. iCloud sync for preferences**
 Sync settings (data cap, billing day, sampling interval, theme) across multiple Macs via `NSUbiquitousKeyValueStore`. Useful for people who switch between a MacBook and a desktop.
+- Explanation: Enables seamless experience across devices by keeping user preferences consistent and up-to-date automatically.
 
 **18. ~~Richer menu bar tooltip~~** ✅ Completed in v3.1
 ~~Expand the existing tooltip (currently just "Download: X / Upload: Y") into a richer summary — today's usage, current cycle total, and percentage of cap used — so users get key stats without opening Statistics at all.~~
 
 **19. Consecutive high-speed alert**
 Notify the user if download or upload stays above a user-defined threshold for a sustained period (e.g. "Upload has been above 50 Mbps for 5 minutes"). Useful for catching runaway background uploads or unexpected downloads. The monitor already tracks a rolling sample window, so the detection logic would be straightforward.
+- Explanation: Alerts users to prolonged high bandwidth use, helping identify unexpected or unwanted network activity early.
 
 **20. App-level bandwidth breakdown (future)**
 Show which apps are consuming the most bandwidth. This requires a network extension or system extension with elevated permissions, which is a significantly larger feature, but would be a major differentiator.
+- Explanation: Provides detailed insight into app-specific data use, empowering users to manage and troubleshoot network consumption effectively.
 
 **21. Data cap colour indicator in menu bar**
 When data cap tracking is enabled, tint the download arrow (↓) with a warning colour (amber → red) as the user approaches their monthly cap — a passive at-a-glance indicator without needing a notification.
+- Explanation: Offers an immediate visual cue that usage is nearing limits, helping users avoid unexpected overages without intrusive alerts.
 
 **22. ~~Onboarding / first-launch walkthrough~~** ✅ Completed in v3.0
 ~~New users may not know they need to grant notification permission or configure their data cap. A simple one-time modal on first launch guiding them through the key settings would reduce confusion.~~
@@ -103,9 +108,11 @@ When data cap tracking is enabled, tint the download arrow (↓) with a warning 
 
 **25. Per-interface breakdown in Statistics**
 The monitor already calls `getPerInterfaceBytes()` internally but aggregates everything to a single total for display. Surfacing a Wi-Fi vs Ethernet (vs other) split in the Statistics view would be useful on machines with multiple active connections.
+- Explanation: Allows users to see how different network interfaces contribute to total usage, aiding troubleshooting and optimization.
 
 **26. Adjustable smoothing window in Settings**
 `smoothWindow` is hardcoded at 5 samples. Exposing this as a slider in Settings (1 = raw, 5 = default, 10 = very smooth) would let users tune display responsiveness vs. stability.
+- Explanation: Gives users control over how sensitive or stable the usage data appears, improving personalization based on preference or network conditions.
 
 **27. ~~Notification Center / desktop widget~~** ✅ Completed in v3.1
 ~~A WidgetKit widget (small and medium sizes) showing last 24 h download/upload totals, current billing cycle usage, data cap progress bar, and peak speeds. Data is written to a shared App Group store by the main app every ~60 seconds and the widget refreshes every 15 minutes or whenever the main app triggers a reload.~~
@@ -121,93 +128,81 @@ The monitor already calls `getPerInterfaceBytes()` internally but aggregates eve
 ### Fresh Feature Ideas (2026)
 
 **29. Automatic Network Type Detection & Profile Switching**  
-Automatically detect when the user switches between Wi-Fi, Ethernet, VPN, or mobile hotspot, and change monitoring profiles or alert thresholds accordingly. E.g., stricter data cap alerts when on mobile hotspot.
+Automatically detect when the user switches between Wi-Fi, Ethernet, VPN, or mobile hotspot, and change monitoring profiles or alert thresholds accordingly. E.g., stricter data cap alerts when on mobile hotspot.  
+- Explanation: This ensures users always have optimal alerts and settings tuned to their current connection, reducing surprises and making the app smarter for mobile or shared environments.
 
 **30. Interactive Usage Heatmap**  
-Show an interactive grid or calendar heatmap visualizing hourly usage patterns across days/weeks. Helps users spot peak hours and plan around heavy usage times.
+Show an interactive grid or calendar heatmap visualizing hourly usage patterns across days/weeks. Helps users spot peak hours and plan around heavy usage times.  
+- Explanation: Provides a visual overview of usage patterns, making it easier to identify trends and optimize network habits.
 
 **31. Real-Time Notification of Unusual Activity**  
-Monitor for sudden spikes or drops in bandwidth outside the user's normal pattern and alert with a notification or banner ("Unusual upload detected at 3:14 PM").
+Monitor for sudden spikes or drops in bandwidth outside the user's normal pattern and alert with a notification or banner ("Unusual upload detected at 3:14 PM").  
+- Explanation: Helps detect anomalies that might indicate problems or unauthorized activity, improving security and awareness.
 
 **32. Quick Actions in Menu Bar**  
-Add right-click or long-press quick actions in the menu bar item for pausing monitoring, resetting peaks, or exporting data without opening the main app window.
+Add right-click or long-press quick actions in the menu bar item for pausing monitoring, resetting peaks, or exporting data without opening the main app window.  
+- Explanation: Enhances usability by providing fast access to common controls directly from the menu bar.
 
 **33. Siri Shortcut & App Intents Support**  
-Expose actions like 'Show current usage', 'Export history', or 'Pause monitoring' as App Intents and Siri Shortcuts for hands-free or automation integration.
+Expose actions like 'Show current usage', 'Export history', or 'Pause monitoring' as App Intents and Siri Shortcuts for hands-free or automation integration.  
+- Explanation: Enables voice control and automation, making the app more accessible and convenient to use.
 
 **34. Advanced Filtering and Custom Alerts**  
-Let users define custom alert rules (e.g. notify if usage > X GB between 6–10 PM, or if upload exceeds Y MB in 10 min). Supports power-user workflows.
+Let users define custom alert rules (e.g. notify if usage > X GB between 6–10 PM, or if upload exceeds Y MB in 10 min). Supports power-user workflows.  
+- Explanation: Provides flexibility for tailored notifications that fit unique user needs and schedules.
 
 **35. Network Quality Score**  
-Calculate and display a 'quality score' based on bandwidth, jitter, and outage frequency to help users identify unreliable connections over time.
+Calculate and display a 'quality score' based on bandwidth, jitter, and outage frequency to help users identify unreliable connections over time.  
+- Explanation: Gives users a simple metric to evaluate their network's reliability and troubleshoot issues proactively.
 
 **36. Bandwidth Forecasting**  
-Predict end-of-cycle usage based on recent trends and alert if the user is on track to exceed their data cap, with suggestions for lowering usage.
+Predict end-of-cycle usage based on recent trends and alert if the user is on track to exceed their data cap, with suggestions for lowering usage.  
+- Explanation: Helps users plan their usage proactively and avoid unexpected overages by anticipating future consumption.
 
 **37. One-Tap Troubleshooting Report**  
-Allow users to generate a diagnostic report (recent rates, network changes, errors) for sharing with support or troubleshooting their connection.
+Allow users to generate a diagnostic report (recent rates, network changes, errors) for sharing with support or troubleshooting their connection.  
+- Explanation: Simplifies problem reporting and support by quickly compiling relevant network info into a shareable format.
 
 **38. Accessibility Optimizations**  
-Add VoiceOver navigation, larger text support, and high-contrast theme options to make the app more usable for everyone.
+Add VoiceOver navigation, larger text support, and high-contrast theme options to make the app more usable for everyone.  
+- Explanation: Ensures the app is inclusive and usable by people with a range of accessibility needs.
 
 **39. Bandwidth Usage Widgets for visionOS**  
-Provide 3D/spatial widgets for visionOS, enabling users to see floating usage graphs or data caps in their environment.
+Provide 3D/spatial widgets for visionOS, enabling users to see floating usage graphs or data caps in their environment.  
+- Explanation: Extends monitoring into spatial computing spaces, offering innovative and immersive ways to visualize data.
 
 **40. Liquid Glass Menu Bar Design**  
-Adopt Apple's Liquid Glass design for the menu bar and main windows, creating a modern, fluid look that adapts to backgrounds and light.
+Adopt Apple's Liquid Glass design for the menu bar and main windows, creating a modern, fluid look that adapts to backgrounds and light.  
+- Explanation: Modernizes the app’s UI with a sleek, context-aware visual style that enhances aesthetics and user experience.
 
 **41. Visual Intelligence Integration**  
-Let users scan their networking environment or hardware setup via camera and match it to troubleshooting tips or usage analytics.
+Let users scan their networking environment or hardware setup via camera and match it to troubleshooting tips or usage analytics.  
+- Explanation: Uses visual input to simplify setup and diagnostics, making troubleshooting more intuitive and accessible.
 
 **42. Scheduled Quiet Hours**  
-Allow users to define time windows when notifications and usage alerts are suppressed—ideal for meetings, sleep, or focus time.
+Allow users to define time windows when notifications and usage alerts are suppressed—ideal for meetings, sleep, or focus time.  
+- Explanation: Respects user downtime by silencing alerts during specified periods, reducing distractions.
 
 **43. Family/Shared Network Usage Tracking**  
-Support for syncing and aggregating data usage across multiple Macs (and possibly iOS devices) for a shared home or office connection.
+Support for syncing and aggregating data usage across multiple Macs (and possibly iOS devices) for a shared home or office connection.  
+- Explanation: Helps households or teams monitor collective usage, improving transparency and management of shared bandwidth.
 
 **44. Detailed ISP Outage Reporting**  
-Automatically detect and log network outages, attempt root-cause analysis, and present a timeline for the user to share with their ISP.
+Automatically detect and log network outages, attempt root-cause analysis, and present a timeline for the user to share with their ISP.  
+- Explanation: Provides actionable insights into connectivity issues to streamline support interactions and resolution.
 
 **45. App Privacy Insights**  
-Summarize privacy risks by tracking which apps/services send or receive data with non-local servers.
+Summarize privacy risks by tracking which apps/services send or receive data with non-local servers.  
+- Explanation: Increases user awareness about data flows, enhancing privacy and security understanding.
 
 **46. Power/Energy Impact Monitoring**  
-Estimate and display the energy impact of heavy network activity on battery life and thermal load.
+Estimate and display the energy impact of heavy network activity on battery life and thermal load.  
+- Explanation: Helps users balance performance with battery health by showing network activity’s power cost.
 
 **47. System Dashboard Widget**  
-Add a system Dashboard widget (if macOS version supports it) with customizable stats for quick at-a-glance usage checks.
+Add a system Dashboard widget (if macOS version supports it) with customizable stats for quick at-a-glance usage checks.  
+- Explanation: Offers handy, always-visible summaries of bandwidth use without opening the app.
 
 **48. Proactive ISP Plan Recommendations**  
-Analyze the user's long-term usage and suggest ISP plans that match their needs more closely, including cost and speed comparisons.
-
----
-
-## Fixes
-
-**F1. ~~Notifications not appearing when app is active~~** ✅ Fixed in v3.0
-Test notification button and data cap alerts were silently suppressed when the Settings window was open. macOS suppresses notifications for the active app by default unless a `UNUserNotificationCenterDelegate` is set. Fixed by conforming `AppDelegate` to `UNUserNotificationCenterDelegate` and implementing `willPresent` to return `.banner` + `.sound`, ensuring notifications display even while the app is frontmost.
-
----
-
-## Completed
-- v2.0 — Menu bar bandwidth monitor with upload/download display
-- v3.0 — Code quality improvements (lazy historyURL, removed dead code, @ViewBuilder refactor, relaunch fix, removed legacy availability guards)
-- v3.0 — Network interface auto-naming now uses `SCNetworkInterfaceCopyAll()` for accurate, locale-aware labels (e.g. correctly identifies Wi-Fi vs Ethernet vs Thunderbolt Bridge)
-- v3.0 — Billing day picker extended to 31; `currentCycleStart()` clamps to the last valid day of the month so days 29–31 work correctly in short months
-- v3.0 — Data cap notifications: fires a system notification at 75%, 90%, and 100% usage; each threshold fires once per billing cycle and resets automatically when the cycle rolls over or totals are reset
-- v3.0 — Settings: sampling interval replaced with dropdown picker (0.25 s – 30 s) + typed text field
-- v3.0 — Settings: data cap size replaced with dropdown picker (1 GB – 1 TB) + typed text field
-- v3.0 — Settings: test notification button added to Data Cap section
-- v3.0 — Fix: notifications now display as banners when app is active (`UNUserNotificationCenterDelegate` + `willPresent`)
-- v3.0 — Onboarding: 7-step first-launch walkthrough covering language, welcome, theme, units, data cap, notifications, and finish; versioned so major updates can re-trigger it for existing users
-- v3.0 — Localisation: full English, French (Français), and German (Deutsch) support via in-app `L` struct; language picker in onboarding step 1 and in Settings; defaults to system locale if supported
-- v3.0 — Speed Test shortcut: "Speed Test" submenu in the menu bar with Fast.com and Speedtest.net options; opens in the default browser
-- v3.1 — Dark mode: added `.dark` theme option; all windows, popovers, and view backgrounds now correctly apply `.darkAqua` appearance; removed hardcoded `.vibrantLight` from About, Tip Jar, Settings, and Details popover
-- v3.1 — Richer menu bar tooltip: hovering the menu bar item now shows last 24 h totals, current cycle totals, data cap % (if enabled), and peak speeds
-- v3.1 — Notification Center / desktop widget: WidgetKit extension (small + medium sizes) showing 24 h usage, cycle totals, cap progress bar, and peak speeds; main app writes to shared App Group store every ~60 seconds and triggers widget reload
-- v3.2 — Daily/weekly bar chart in Statistics: toggle between 7-day and 30-day views using Swift Charts `BarMark`; data grouped by calendar day from the existing 35-day history store
-- v3.2 — Menu bar graph mode: new "Mini graph" option in Settings (Appearance section) draws a live sparkline of recent download/upload rates in the menu bar instead of text
-- v3.2 — Export CSV: "Export CSV…" button in Statistics writes 35-day history (date, download bytes, upload bytes) via `NSSavePanel`
-- v3.2 — Reset Peaks: separate "Reset Peaks" button next to the Peak Rates heading in Statistics; clears only peak download and upload values with a confirmation alert
-- v3.2 — Tip jar nudge: clickable "Enjoying the app? Buy me a coffee ☕" link in Statistics view and in About window; both open the Tip Jar window
-
+Analyze the user's long-term usage and suggest ISP plans that match their needs more closely, including cost and speed comparisons.  
+- Explanation: Helps users optimize their internet service choices by matching plans to actual usage patterns and budgets.
