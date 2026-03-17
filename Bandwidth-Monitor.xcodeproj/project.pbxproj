@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		225A96E32F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md in Resources */ = {isa = PBXBuildFile; fileRef = 225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */; };
+		225A96E32F6167BF00BF2CBA /* BUGS-FIXES.md in Resources */ = {isa = PBXBuildFile; fileRef = 225A96E22F6167BF00BF2CBA /* BUGS-FIXES.md */; };
 		225A97052F61975B00BF2CBA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225A97042F61975B00BF2CBA /* WidgetKit.framework */; };
 		225A97072F61975B00BF2CBA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225A97062F61975B00BF2CBA /* SwiftUI.framework */; };
 		225A97122F61975C00BF2CBA /* BandwidthWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -39,7 +39,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "FEATURES-REQUESTS-FIXES.md"; sourceTree = "<group>"; };
+		225A96E22F6167BF00BF2CBA /* BUGS-FIXES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "BUGS-FIXES.md"; sourceTree = "<group>"; };
 		225A97022F61975B00BF2CBA /* BandwidthWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BandwidthWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		225A97042F61975B00BF2CBA /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		225A97062F61975B00BF2CBA /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -111,7 +111,7 @@
 				225A97082F61975B00BF2CBA /* BandwidthWidget */,
 				225A97032F61975B00BF2CBA /* Frameworks */,
 				225FB69D2E9EE90F00838A81 /* Products */,
-				225A96E22F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md */,
+				225A96E22F6167BF00BF2CBA /* BUGS-FIXES.md */,
 				226686902F69FE3100EF10E4 /* NEW-FEATURES.md */,
 			);
 			sourceTree = "<group>";
@@ -225,7 +225,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				226686912F69FE3100EF10E4 /* NEW-FEATURES.md in Resources */,
-				225A96E32F6167BF00BF2CBA /* FEATURES-REQUESTS-FIXES.md in Resources */,
+				225A96E32F6167BF00BF2CBA /* BUGS-FIXES.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
