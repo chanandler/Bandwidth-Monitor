@@ -118,6 +118,40 @@ The monitor already calls `getPerInterfaceBytes()` internally but aggregates eve
 
 ---
 
+### Fresh Feature Ideas (2026)
+
+**29. Automatic Network Type Detection & Profile Switching**  
+Automatically detect when the user switches between Wi-Fi, Ethernet, VPN, or mobile hotspot, and change monitoring profiles or alert thresholds accordingly. E.g., stricter data cap alerts when on mobile hotspot.
+
+**30. Interactive Usage Heatmap**  
+Show an interactive grid or calendar heatmap visualizing hourly usage patterns across days/weeks. Helps users spot peak hours and plan around heavy usage times.
+
+**31. Real-Time Notification of Unusual Activity**  
+Monitor for sudden spikes or drops in bandwidth outside the user's normal pattern and alert with a notification or banner ("Unusual upload detected at 3:14 PM").
+
+**32. Quick Actions in Menu Bar**  
+Add right-click or long-press quick actions in the menu bar item for pausing monitoring, resetting peaks, or exporting data without opening the main app window.
+
+**33. Siri Shortcut & App Intents Support**  
+Expose actions like 'Show current usage', 'Export history', or 'Pause monitoring' as App Intents and Siri Shortcuts for hands-free or automation integration.
+
+**34. Advanced Filtering and Custom Alerts**  
+Let users define custom alert rules (e.g. notify if usage > X GB between 6–10 PM, or if upload exceeds Y MB in 10 min). Supports power-user workflows.
+
+**35. Network Quality Score**  
+Calculate and display a 'quality score' based on bandwidth, jitter, and outage frequency to help users identify unreliable connections over time.
+
+**36. Bandwidth Forecasting**  
+Predict end-of-cycle usage based on recent trends and alert if the user is on track to exceed their data cap, with suggestions for lowering usage.
+
+**37. One-Tap Troubleshooting Report**  
+Allow users to generate a diagnostic report (recent rates, network changes, errors) for sharing with support or troubleshooting their connection.
+
+**38. Accessibility Optimizations**  
+Add VoiceOver navigation, larger text support, and high-contrast theme options to make the app more usable for everyone.
+
+---
+
 ## Fixes
 
 **F1. ~~Notifications not appearing when app is active~~** ✅ Fixed in v3.0
@@ -140,7 +174,7 @@ Test notification button and data cap alerts were silently suppressed when the S
 - v3.0 — Speed Test shortcut: "Speed Test" submenu in the menu bar with Fast.com and Speedtest.net options; opens in the default browser
 - v3.1 — Dark mode: added `.dark` theme option; all windows, popovers, and view backgrounds now correctly apply `.darkAqua` appearance; removed hardcoded `.vibrantLight` from About, Tip Jar, Settings, and Details popover
 - v3.1 — Richer menu bar tooltip: hovering the menu bar item now shows last 24 h totals, current cycle totals, data cap % (if enabled), and peak speeds
-- v3.1 — Notification Center / desktop widget: WidgetKit extension (small + medium) showing 24 h usage, cycle totals, cap progress bar, and peak speeds; main app writes to shared App Group store every ~60 s and triggers widget reload
+- v3.1 — Notification Center / desktop widget: WidgetKit extension (small + medium sizes) showing 24 h usage, cycle totals, cap progress bar, and peak speeds; main app writes to shared App Group store every ~60 seconds and triggers widget reload
 - v3.2 — Daily/weekly bar chart in Statistics: toggle between 7-day and 30-day views using Swift Charts `BarMark`; data grouped by calendar day from the existing 35-day history store
 - v3.2 — Menu bar graph mode: new "Mini graph" option in Settings (Appearance section) draws a live sparkline of recent download/upload rates in the menu bar instead of text
 - v3.2 — Export CSV: "Export CSV…" button in Statistics writes 35-day history (date, download bytes, upload bytes) via `NSSavePanel`
