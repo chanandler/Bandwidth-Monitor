@@ -2251,7 +2251,12 @@ nonisolated extension PersistedData: Codable {}
         DispatchQueue.global(qos: .utility).async {
             do {
                 let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: url, options: .atomic)
+                // Write to a temp file first then rename — avoids blocking the queue on
+                // .atomic's coordinated-write path which can stall under iCloud/Time Machine.
+                let tmpURL = url.deletingLastPathComponent()
+                    .appendingPathComponent(".history.json.tmp")
+                try data.write(to: tmpURL, options: [])
+                _ = try FileManager.default.replaceItemAt(url, withItemAt: tmpURL)
             } catch {
                 // ignore errors
             }
