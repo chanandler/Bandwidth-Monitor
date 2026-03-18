@@ -2014,9 +2014,9 @@ nonisolated extension PersistedData: Codable {}
         // Use strict leeway to reduce jitter
         source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         source.setEventHandler { [weak self] in
-            guard let self = self else { return }
-            DispatchQueue.main.async {
-                self.poll()
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                self?.poll()
             }
         }
         timerSource = source
@@ -2042,9 +2042,9 @@ nonisolated extension PersistedData: Codable {}
         let source = DispatchSource.makeTimerSource(queue: timerQueue)
         source.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         source.setEventHandler { [weak self] in
-            guard let self = self else { return }
-            DispatchQueue.main.async {
-                self.poll()
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                self?.poll()
             }
         }
         timerSource = source
