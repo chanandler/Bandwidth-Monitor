@@ -1960,7 +1960,10 @@ nonisolated extension PersistedData: Codable {}
     // File URL to save/load history JSON data — computed once and cached
     private lazy var historyURL: URL = {
         let fm = FileManager.default
-        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            // Fall back to temp directory if Application Support is unavailable
+            return URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("history.json")
+        }
         let appDir = dir.appendingPathComponent("MenuBarBandwidthMonitor", isDirectory: true)
         try? fm.createDirectory(at: appDir, withIntermediateDirectories: true)
         return appDir.appendingPathComponent("history.json")
