@@ -399,10 +399,9 @@ struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 Button(L.allowNotifications) {
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                        if granted {
-                            DispatchQueue.main.async { page += 1 }
-                        }
+                    Task { @MainActor in
+                        let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
+                        if granted { page += 1 }
                     }
                 }
                 .buttonStyle(.borderedProminent)
