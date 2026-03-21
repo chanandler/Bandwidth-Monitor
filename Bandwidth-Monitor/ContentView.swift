@@ -1811,7 +1811,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         self.tipWindowController = controller
         controller.showWindow(self)
         window.center()
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -2157,13 +2157,21 @@ nonisolated extension PersistedData: Codable {}
         if getifaddrs(&ifaddr) == 0 {
             var ptr = ifaddr
             while ptr != nil {
+                // Only AF_LINK entries carry if_data statistics. IPv4/IPv6 entries for the
+                // same interface share the flags but ifa_data points to a different structure;
+                // accessing it as if_data is undefined behaviour and crashes on macOS 26+.
+                guard let addr = ptr!.pointee.ifa_addr,
+                      addr.pointee.sa_family == UInt8(AF_LINK) else {
+                    ptr = ptr!.pointee.ifa_next
+                    continue
+                }
                 let flags = Int32(ptr!.pointee.ifa_flags)
                 if (flags & (IFF_UP|IFF_RUNNING) == (IFF_UP|IFF_RUNNING)) && (flags & IFF_LOOPBACK == 0) {
                     if let nameC = ptr!.pointee.ifa_name {
                         let name = String(cString: nameC)
-                        if let data = unsafeBitCast(ptr!.pointee.ifa_data, to: UnsafeMutablePointer<if_data>?.self) {
-                            let rx = UInt64(data.pointee.ifi_ibytes)
-                            let tx = UInt64(data.pointee.ifi_obytes)
+                        if let dataPtr = ptr!.pointee.ifa_data?.assumingMemoryBound(to: if_data.self) {
+                            let rx = UInt64(dataPtr.pointee.ifi_ibytes)
+                            let tx = UInt64(dataPtr.pointee.ifi_obytes)
                             results.append((name, rx, tx))
                         }
                     }
