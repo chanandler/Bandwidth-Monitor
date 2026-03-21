@@ -1339,6 +1339,7 @@ struct MenuBarBandwidthMonitorApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem!
     var monitor: BandwidthMonitor!
@@ -1610,7 +1611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // Update UI every 1 second
         timerCancellable = monitor.$rates
             .receive(on: RunLoop.main)
-            .sink { [weak self] (rates: BandwidthRates) in
+            .sink { @MainActor [weak self] (rates: BandwidthRates) in
                 guard let self = self else { return }
 
                 let useGraph = (Preferences.shared.menuBarStyle == .graph)
@@ -1711,14 +1712,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         // Show onboarding on first launch or when a major version bump requires it
         let currentOnboardingVersion = 1
         if UserDefaults.standard.integer(forKey: "completedOnboardingVersion") < currentOnboardingVersion {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.showOnboarding()
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                self?.showOnboarding()
             }
         }
 
         themeCancellable = Preferences.shared.$theme
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { @MainActor [weak self] _ in
                 guard let self = self else { return }
                 NSApp.appearance = AppDelegate.resolvedNSAppearance()
                 let resolved = AppDelegate.resolvedNSAppearance()
@@ -2001,7 +2003,7 @@ nonisolated extension PersistedData: Codable {}
         samplingCancellable = Preferences.shared.$samplingInterval
             .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { @MainActor [weak self] _ in
                 self?.rescheduleTimerIfNeeded()
             }
     }
